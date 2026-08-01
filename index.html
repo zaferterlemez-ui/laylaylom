@@ -116,6 +116,25 @@
     grid-template-columns:repeat(auto-fill, minmax(230px,1fr));
     gap:22px;
   }
+  .category-bar{
+    display:flex;flex-wrap:wrap;gap:10px;
+    margin-bottom:26px;
+  }
+  .cat-pill{
+    background:var(--bg-card);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:9px 18px;
+    font-size:13px;font-weight:600;
+    color:var(--ink-soft);
+    display:flex;align-items:center;gap:8px;
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .cat-pill:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(43,36,29,.10);}
+  .cat-pill.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .cat-pill .count{
+    font-size:11px;opacity:.65;
+  }
   .card{
     background:var(--bg-card);
     border:1px solid var(--line);
@@ -277,6 +296,7 @@
     <div id="katalog" class="section-title">
       <h2>Ürünler</h2>
     </div>
+    <div id="categoryBar" class="category-bar"></div>
     <div id="productGrid" class="grid">
       <div class="empty-state">Ürünler yükleniyor…</div>
     </div>
@@ -357,7 +377,15 @@
           <input class="field full" id="pName" placeholder="Ürün adı">
           <input class="field" id="pPrice" placeholder="Fiyat (₺)" type="number">
           <input class="field" id="pStock" placeholder="Stok adedi" type="number">
-          <input class="field full" id="pCategory" placeholder="Kategori (örn: Genel)">
+          <select class="field full" id="pCategory">
+            <option value="Giyim & Ayakkabı">Giyim &amp; Ayakkabı</option>
+            <option value="Parfüm & Kozmetik">Parfüm &amp; Kozmetik</option>
+            <option value="Elektrik & Elektronik">Elektrik &amp; Elektronik</option>
+            <option value="Hırdavat & Bahçe">Hırdavat &amp; Bahçe</option>
+            <option value="Kamp & Outdoor">Kamp &amp; Outdoor</option>
+            <option value="Ev & Yaşam">Ev &amp; Yaşam</option>
+            <option value="Diğer">Diğer</option>
+          </select>
           <input class="field full" id="pImage" placeholder="Görsel URL (opsiyonel)">
           <textarea class="field full" id="pDesc" placeholder="Açıklama"></textarea>
         </div>
@@ -379,6 +407,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let products = [];
 let cart = []; // {id, name, price, qty, image_url}
+let activeCategory = "Tümü";
 
 // ============ INIT ============
 document.addEventListener("DOMContentLoaded", async () => {
@@ -395,13 +424,47 @@ async function loadProducts(){
   renderGrid();
 }
 
+function renderCategoryBar(){
+  const bar = document.getElementById("categoryBar");
+  if (!products.length){ bar.innerHTML = ""; return; }
+
+  const counts = {};
+  products.forEach(p => {
+    const cat = (p.category || "Genel").trim() || "Genel";
+    counts[cat] = (counts[cat] || 0) + 1;
+  });
+  const cats = Object.keys(counts).sort((a,b) => a.localeCompare(b,"tr"));
+
+  if (!cats.includes(activeCategory) && activeCategory !== "Tümü") activeCategory = "Tümü";
+
+  const pills = [
+    `<button class="cat-pill ${activeCategory==='Tümü'?'active':''}" onclick="filterCategory('Tümü')">Tümü <span class="count">${products.length}</span></button>`,
+    ...cats.map(c => `<button class="cat-pill ${activeCategory===c?'active':''}" onclick="filterCategory('${c.replace(/'/g,"\\'")}')">${escapeHtml(c)} <span class="count">${counts[c]}</span></button>`)
+  ];
+  bar.innerHTML = pills.join("");
+}
+
+function filterCategory(cat){
+  activeCategory = cat;
+  renderGrid();
+}
+
 function renderGrid(){
+  renderCategoryBar();
   const grid = document.getElementById("productGrid");
   if (!products.length){
     grid.innerHTML = `<div class="empty-state">Henüz ürün eklenmemiş.</div>`;
     return;
   }
-  grid.innerHTML = products.map(p => `
+  const visible = activeCategory === "Tümü"
+    ? products
+    : products.filter(p => (p.category || "Genel").trim() === activeCategory);
+
+  if (!visible.length){
+    grid.innerHTML = `<div class="empty-state">Bu kategoride ürün yok.</div>`;
+    return;
+  }
+  grid.innerHTML = visible.map(p => `
     <div class="card">
       <div class="card-img"><img src="${p.image_url || 'https://picsum.photos/seed/'+p.id+'/600/600'}" alt="${escapeHtml(p.name)}"></div>
       <div class="card-body">
@@ -585,7 +648,8 @@ async function addProduct(){
   const { error } = await sb.from("products").insert({ name, price, stock, category, image_url, description });
   if (error){ showToast("Eklenemedi: " + error.message); return; }
 
-  ["pName","pPrice","pStock","pCategory","pImage","pDesc"].forEach(id => document.getElementById(id).value = "");
+  ["pName","pPrice","pStock","pImage","pDesc"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("pCategory").selectedIndex = 0;
   showToast("Ürün eklendi");
   switchTab("products");
   loadAdminData();
