@@ -386,7 +386,10 @@
             <option value="Ev & Yaşam">Ev &amp; Yaşam</option>
             <option value="Diğer">Diğer</option>
           </select>
-          <input class="field full" id="pImage" placeholder="Görsel URL (opsiyonel)">
+          <div class="full">
+            <input type="file" accept="image/*" id="pImageFile" class="field" style="padding:9px;" onchange="previewImage(event)">
+            <img id="pImagePreview" style="display:none;width:90px;height:90px;object-fit:cover;border-radius:10px;margin-top:8px;">
+          </div>
           <textarea class="field full" id="pDesc" placeholder="Açıklama"></textarea>
         </div>
         <button class="btn-primary" onclick="addProduct()">Ürünü Ekle</button>
@@ -635,20 +638,50 @@ async function deleteProduct(id){
   loadAdminData();
 }
 
+function previewImage(event){
+  const file = event.target.files[0];
+  const preview = document.getElementById("pImagePreview");
+  if (!file){ preview.style.display = "none"; return; }
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = "block";
+}
+
+async function uploadProductImage(file){
+  const ext = file.name.split(".").pop();
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error: upErr } = await sb.storage.from("product-images").upload(path, file);
+  if (upErr) throw upErr;
+  const { data } = sb.storage.from("product-images").getPublicUrl(path);
+  return data.publicUrl;
+}
+
 async function addProduct(){
   const name = document.getElementById("pName").value.trim();
   const price = parseFloat(document.getElementById("pPrice").value);
   const stock = parseInt(document.getElementById("pStock").value) || 0;
   const category = document.getElementById("pCategory").value.trim();
-  const image_url = document.getElementById("pImage").value.trim();
+  const imageFile = document.getElementById("pImageFile").files[0];
   const description = document.getElementById("pDesc").value.trim();
 
   if (!name || isNaN(price)){ showToast("Ürün adı ve fiyat zorunlu"); return; }
 
+  let image_url = "";
+  if (imageFile){
+    showToast("Fotoğraf yükleniyor…");
+    try{
+      image_url = await uploadProductImage(imageFile);
+    }catch(err){
+      showToast("Fotoğraf yüklenemedi: " + err.message);
+      return;
+    }
+  }
+
   const { error } = await sb.from("products").insert({ name, price, stock, category, image_url, description });
   if (error){ showToast("Eklenemedi: " + error.message); return; }
 
-  ["pName","pPrice","pStock","pImage","pDesc"].forEach(id => document.getElementById(id).value = "");
+  ["pName","pPrice","pStock","pDesc"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("pImageFile").value = "";
+  document.getElementById("pImagePreview").style.display = "none";
   document.getElementById("pCategory").selectedIndex = 0;
   showToast("Ürün eklendi");
   switchTab("products");
