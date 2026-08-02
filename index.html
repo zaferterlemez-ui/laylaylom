@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>laylaylom — Katalog</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛍️</text></svg>">
+<meta name="description" content="laylaylom — kataloğa göz atın, sepetinize ekleyin, WhatsApp üzerinden kolayca sipariş verin.">
+<meta property="og:title" content="laylaylom — Katalog">
+<meta property="og:description" content="Beğendiğini seç, WhatsApp'tan sipariş ver.">
+<meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -296,6 +301,7 @@
     <div id="katalog" class="section-title">
       <h2>Ürünler</h2>
     </div>
+    <input class="field" id="searchBox" placeholder="🔍 Ürün ara…" style="max-width:320px;margin-bottom:18px;" oninput="renderGrid()">
     <div id="categoryBar" class="category-bar"></div>
     <div id="productGrid" class="grid">
       <div class="empty-state">Ürünler yükleniyor…</div>
@@ -346,36 +352,42 @@
   <main>
     <div class="stat-row">
       <div class="stat-card"><div class="label">Toplam Sipariş</div><div class="value" id="statOrders">0</div></div>
-      <div class="stat-card"><div class="label">Toplam Kazanç</div><div class="value" id="statEarnings">0 ₺</div></div>
+      <div class="stat-card"><div class="label">Toplam Ciro</div><div class="value" id="statRevenue">0 ₺</div></div>
+      <div class="stat-card"><div class="label">Toplam Kâr</div><div class="value" id="statEarnings">0 ₺</div></div>
       <div class="stat-card"><div class="label">Ürün Sayısı</div><div class="value" id="statProducts">0</div></div>
     </div>
 
     <div class="admin-tabs">
       <button class="admin-tab active" data-tab="products" onclick="switchTab('products')">Ürünler</button>
       <button class="admin-tab" data-tab="orders" onclick="switchTab('orders')">Siparişler</button>
-      <button class="admin-tab" data-tab="addProduct" onclick="switchTab('addProduct')">+ Ürün Ekle</button>
+      <button class="admin-tab" data-tab="addProduct" onclick="cancelEdit(); switchTab('addProduct')">+ Ürün Ekle</button>
     </div>
 
     <div id="tab-products">
+      <div style="overflow-x:auto;">
       <table>
-        <thead><tr><th>Ürün</th><th>Kategori</th><th>Fiyat</th><th>Stok</th><th></th></tr></thead>
+        <thead><tr><th>Görsel</th><th>Ürün</th><th>Kategori</th><th>Satış</th><th>Maliyet</th><th>Kâr/adet</th><th>Stok</th><th></th></tr></thead>
         <tbody id="adminProductsBody"></tbody>
       </table>
+      </div>
     </div>
 
     <div id="tab-orders" style="display:none;">
+      <div style="overflow-x:auto;">
       <table>
-        <thead><tr><th>Tarih</th><th>Müşteri</th><th>Telefon</th><th>Toplam</th><th>Durum</th></tr></thead>
+        <thead><tr><th>Tarih</th><th>Müşteri</th><th>Telefon</th><th>Ürünler</th><th>Toplam</th><th>Kâr</th><th>Durum</th><th></th></tr></thead>
         <tbody id="adminOrdersBody"></tbody>
       </table>
+      </div>
     </div>
 
     <div id="tab-addProduct" style="display:none;">
       <div class="modal" style="max-width:520px;padding:24px;">
-        <h3 style="margin-bottom:16px;">Yeni Ürün</h3>
+        <h3 style="margin-bottom:16px;" id="productFormTitle">Yeni Ürün</h3>
         <div class="form-grid">
           <input class="field full" id="pName" placeholder="Ürün adı">
-          <input class="field" id="pPrice" placeholder="Fiyat (₺)" type="number">
+          <input class="field" id="pPrice" placeholder="Satış Fiyatı (₺)" type="number">
+          <input class="field" id="pCost" placeholder="Maliyet (₺)" type="number">
           <input class="field" id="pStock" placeholder="Stok adedi" type="number">
           <select class="field full" id="pCategory">
             <option value="Giyim & Ayakkabı">Giyim &amp; Ayakkabı</option>
@@ -392,7 +404,8 @@
           </div>
           <textarea class="field full" id="pDesc" placeholder="Açıklama"></textarea>
         </div>
-        <button class="btn-primary" onclick="addProduct()">Ürünü Ekle</button>
+        <button class="btn-primary" id="productFormBtn" onclick="addProduct()">Ürünü Ekle</button>
+        <button class="link-btn" id="cancelEditBtn" style="display:none;margin-top:10px;" onclick="cancelEdit()">Düzenlemeyi iptal et</button>
       </div>
     </div>
   </main>
@@ -409,12 +422,24 @@ const WHATSAPP_NUMBER = "905445145544"; // 0545 514 55 44
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let products = [];
-let cart = []; // {id, name, price, qty, image_url}
+let cart = loadCartFromStorage();
 let activeCategory = "Tümü";
+let editingProductId = null;
+
+function loadCartFromStorage(){
+  try{
+    const saved = localStorage.getItem("laylaylom_cart");
+    return saved ? JSON.parse(saved) : [];
+  }catch(e){ return []; }
+}
+function saveCartToStorage(){
+  try{ localStorage.setItem("laylaylom_cart", JSON.stringify(cart)); }catch(e){}
+}
 
 // ============ INIT ============
 document.addEventListener("DOMContentLoaded", async () => {
   await loadProducts();
+  updateCartUI();
   const { data: { session } } = await sb.auth.getSession();
   if (session) showAdmin();
 });
@@ -459,12 +484,17 @@ function renderGrid(){
     grid.innerHTML = `<div class="empty-state">Henüz ürün eklenmemiş.</div>`;
     return;
   }
-  const visible = activeCategory === "Tümü"
+  const visible = (activeCategory === "Tümü"
     ? products
-    : products.filter(p => (p.category || "Genel").trim() === activeCategory);
+    : products.filter(p => (p.category || "Genel").trim() === activeCategory)
+  ).filter(p => {
+    const q = (document.getElementById("searchBox")?.value || "").trim().toLocaleLowerCase("tr");
+    if (!q) return true;
+    return (p.name||"").toLocaleLowerCase("tr").includes(q) || (p.description||"").toLocaleLowerCase("tr").includes(q);
+  });
 
   if (!visible.length){
-    grid.innerHTML = `<div class="empty-state">Bu kategoride ürün yok.</div>`;
+    grid.innerHTML = `<div class="empty-state">Aradığınız kriterlere uygun ürün yok.</div>`;
     return;
   }
   grid.innerHTML = visible.map(p => `
@@ -474,10 +504,11 @@ function renderGrid(){
         <div class="card-cat">${escapeHtml(p.category || "Genel")}</div>
         <h3 class="card-name">${escapeHtml(p.name)}</h3>
         <div class="card-desc">${escapeHtml(p.description || "")}</div>
-        ${p.stock !== null && p.stock <= 3 ? `<div class="stock-warn">Son ${p.stock} adet!</div>` : ""}
+        ${p.stock !== null && p.stock <= 3 && p.stock > 0 ? `<div class="stock-warn">Son ${p.stock} adet!</div>` : ""}
+        ${p.stock !== null && p.stock <= 0 ? `<div class="stock-warn">Stokta yok</div>` : ""}
         <div class="card-footer">
           <span class="price">${formatPrice(p.price)}</span>
-          <button class="add-btn" onclick="addToCart('${p.id}')">Sepete Ekle</button>
+          <button class="add-btn" ${p.stock !== null && p.stock <= 0 ? "disabled style=\"opacity:.5;cursor:not-allowed;\"" : ""} onclick="addToCart('${p.id}')">${p.stock !== null && p.stock <= 0 ? "Stokta Yok" : "Sepete Ekle"}</button>
         </div>
       </div>
     </div>
@@ -488,15 +519,21 @@ function renderGrid(){
 function addToCart(id){
   const p = products.find(x => x.id === id);
   if (!p) return;
+  if (p.stock !== null && p.stock <= 0){ showToast("Bu ürün stokta yok"); return; }
   const existing = cart.find(c => c.id === id);
+  const currentQty = existing ? existing.qty : 0;
+  if (p.stock !== null && currentQty + 1 > p.stock){ showToast(`Stokta sadece ${p.stock} adet var`); return; }
   if (existing) existing.qty += 1;
-  else cart.push({ id:p.id, name:p.name, price:p.price, qty:1, image_url:p.image_url });
+  else cart.push({ id:p.id, name:p.name, price:p.price, cost:p.cost||0, qty:1, image_url:p.image_url, stock:p.stock });
   updateCartUI();
   showToast(`${p.name} sepete eklendi`);
 }
 function changeQty(id, delta){
   const item = cart.find(c => c.id === id);
   if (!item) return;
+  if (delta > 0 && item.stock !== null && item.stock !== undefined && item.qty + 1 > item.stock){
+    showToast(`Stokta sadece ${item.stock} adet var`); return;
+  }
   item.qty += delta;
   if (item.qty <= 0) cart = cart.filter(c => c.id !== id);
   updateCartUI();
@@ -506,6 +543,7 @@ function removeFromCart(id){
   updateCartUI();
 }
 function updateCartUI(){
+  saveCartToStorage();
   document.getElementById("cartCount").textContent = cart.reduce((s,c)=>s+c.qty,0);
   const body = document.getElementById("cartBody");
   if (!cart.length){
@@ -546,16 +584,28 @@ async function sendOrder(){
   const name = document.getElementById("custName").value.trim();
   const phone = document.getElementById("custPhone").value.trim();
   if (!name || !phone){ showToast("Lütfen adınızı ve telefonunuzu girin"); return; }
+  const phoneDigits = phone.replace(/\D/g,"");
+  if (phoneDigits.length < 10){ showToast("Lütfen geçerli bir telefon numarası girin"); return; }
 
   const total = cart.reduce((s,c)=>s+c.price*c.qty,0);
   const { error } = await sb.from("orders").insert({
-    items: cart.map(c => ({ id:c.id, name:c.name, price:c.price, qty:c.qty })),
+    items: cart.map(c => ({ id:c.id, name:c.name, price:c.price, cost:c.cost||0, qty:c.qty })),
     total,
     customer_name: name,
     customer_phone: phone,
     status: "yeni"
   });
   if (error){ console.error(error); showToast("Sipariş kaydedilemedi, tekrar deneyin"); return; }
+
+  // Stoktan düş
+  for (const c of cart){
+    const p = products.find(x => x.id === c.id);
+    if (p && p.stock !== null && p.stock !== undefined){
+      const newStock = Math.max(0, p.stock - c.qty);
+      await sb.from("products").update({ stock: newStock }).eq("id", c.id);
+    }
+  }
+  await loadProducts();
 
   let msg = `Merhaba, laylaylom üzerinden sipariş vermek istiyorum:\n\n`;
   cart.forEach(c => { msg += `• ${c.name} x${c.qty} — ${formatPrice(c.price*c.qty)}\n`; });
@@ -603,31 +653,72 @@ async function loadAdminData(){
 
   document.getElementById("statProducts").textContent = products.length;
   document.getElementById("statOrders").textContent = (orders||[]).length;
-  const earnings = (orders||[]).reduce((s,o)=>s+Number(o.total||0),0);
-  document.getElementById("statEarnings").textContent = formatPrice(earnings);
+  const validOrders = (orders||[]).filter(o => o.status !== "iptal");
+  const revenue = validOrders.reduce((s,o)=>s+Number(o.total||0),0);
+  const profit = validOrders.reduce((s,o)=> s + (o.items||[]).reduce((is,i)=> is + (Number(i.price||0)-Number(i.cost||0))*Number(i.qty||0), 0), 0);
+  document.getElementById("statEarnings").textContent = formatPrice(profit);
+  const revEl = document.getElementById("statRevenue");
+  if (revEl) revEl.textContent = formatPrice(revenue);
 }
 
 function renderAdminProducts(){
-  document.getElementById("adminProductsBody").innerHTML = products.map(p => `
+  document.getElementById("adminProductsBody").innerHTML = products.map(p => {
+    const profit = Number(p.price||0) - Number(p.cost||0);
+    return `
     <tr>
+      <td><img src="${p.image_url || 'https://picsum.photos/seed/'+p.id+'/100/100'}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;"></td>
       <td>${escapeHtml(p.name)}</td>
       <td>${escapeHtml(p.category||"-")}</td>
       <td>${formatPrice(p.price)}</td>
+      <td>${formatPrice(p.cost)}</td>
+      <td style="color:${profit>=0?'var(--ink)':'var(--accent-dark)'};font-weight:700;">${formatPrice(profit)}</td>
       <td>${p.stock ?? "-"}</td>
-      <td><button class="small-btn danger" onclick="deleteProduct('${p.id}')">Sil</button></td>
+      <td style="display:flex;gap:6px;">
+        <button class="small-btn" onclick="editProduct('${p.id}')">Düzenle</button>
+        <button class="small-btn danger" onclick="deleteProduct('${p.id}')">Sil</button>
+      </td>
     </tr>
-  `).join("") || `<tr><td colspan="5">Ürün yok</td></tr>`;
+  `;
+  }).join("") || `<tr><td colspan="8">Ürün yok</td></tr>`;
 }
+
+const ORDER_STATUSES = ["yeni","onaylandı","kargoda","tamamlandı","iptal"];
+
 function renderAdminOrders(orders){
-  document.getElementById("adminOrdersBody").innerHTML = orders.map(o => `
+  document.getElementById("adminOrdersBody").innerHTML = orders.map(o => {
+    const orderProfit = (o.items||[]).reduce((s,i)=> s + (Number(i.price||0)-Number(i.cost||0))*Number(i.qty||0), 0);
+    return `
     <tr>
       <td>${new Date(o.created_at).toLocaleString("tr-TR")}</td>
       <td>${escapeHtml(o.customer_name||"-")}</td>
       <td>${escapeHtml(o.customer_phone||"-")}</td>
+      <td style="max-width:220px;font-size:12px;color:var(--ink-soft);">${(o.items||[]).map(i=>`${escapeHtml(i.name)} x${i.qty}`).join(", ")}</td>
       <td>${formatPrice(o.total)}</td>
-      <td>${escapeHtml(o.status||"yeni")}</td>
+      <td style="font-weight:700;">${formatPrice(orderProfit)}</td>
+      <td>
+        <select class="small-btn" style="font-weight:600;" onchange="updateOrderStatus('${o.id}', this.value)">
+          ${ORDER_STATUSES.map(s => `<option value="${s}" ${o.status===s?"selected":""}>${s}</option>`).join("")}
+        </select>
+      </td>
+      <td><button class="small-btn danger" onclick="deleteOrder('${o.id}')">Sil</button></td>
     </tr>
-  `).join("") || `<tr><td colspan="5">Henüz sipariş yok</td></tr>`;
+  `;
+  }).join("") || `<tr><td colspan="8">Henüz sipariş yok</td></tr>`;
+}
+
+async function updateOrderStatus(id, status){
+  const { error } = await sb.from("orders").update({ status }).eq("id", id);
+  if (error){ showToast("Güncellenemedi: " + error.message); return; }
+  showToast("Sipariş durumu güncellendi");
+  loadAdminData();
+}
+
+async function deleteOrder(id){
+  if (!confirm("Bu siparişi silmek istediğinize emin misiniz?")) return;
+  const { error } = await sb.from("orders").delete().eq("id", id);
+  if (error){ showToast("Silinemedi: " + error.message); return; }
+  showToast("Sipariş silindi");
+  loadAdminData();
 }
 
 async function deleteProduct(id){
@@ -655,9 +746,44 @@ async function uploadProductImage(file){
   return data.publicUrl;
 }
 
+function editProduct(id){
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+  editingProductId = id;
+  document.getElementById("pName").value = p.name || "";
+  document.getElementById("pPrice").value = p.price ?? "";
+  document.getElementById("pCost").value = p.cost ?? "";
+  document.getElementById("pStock").value = p.stock ?? "";
+  document.getElementById("pCategory").value = p.category || "Diğer";
+  document.getElementById("pDesc").value = p.description || "";
+  if (p.image_url){
+    document.getElementById("pImagePreview").src = p.image_url;
+    document.getElementById("pImagePreview").style.display = "block";
+  } else {
+    document.getElementById("pImagePreview").removeAttribute("src");
+    document.getElementById("pImagePreview").style.display = "none";
+  }
+  document.getElementById("productFormTitle").textContent = "Ürünü Düzenle";
+  document.getElementById("productFormBtn").textContent = "Değişiklikleri Kaydet";
+  document.getElementById("cancelEditBtn").style.display = "block";
+  switchTab("addProduct");
+}
+
+function cancelEdit(){
+  editingProductId = null;
+  ["pName","pPrice","pCost","pStock","pDesc"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("pImageFile").value = "";
+  document.getElementById("pImagePreview").style.display = "none";
+  document.getElementById("pCategory").selectedIndex = 0;
+  document.getElementById("productFormTitle").textContent = "Yeni Ürün";
+  document.getElementById("productFormBtn").textContent = "Ürünü Ekle";
+  document.getElementById("cancelEditBtn").style.display = "none";
+}
+
 async function addProduct(){
   const name = document.getElementById("pName").value.trim();
   const price = parseFloat(document.getElementById("pPrice").value);
+  const cost = parseFloat(document.getElementById("pCost").value) || 0;
   const stock = parseInt(document.getElementById("pStock").value) || 0;
   const category = document.getElementById("pCategory").value.trim();
   const imageFile = document.getElementById("pImageFile").files[0];
@@ -666,24 +792,37 @@ async function addProduct(){
   if (!name || isNaN(price)){ showToast("Ürün adı ve fiyat zorunlu"); return; }
 
   let image_url = "";
+  let oldImageUrl = "";
+  if (editingProductId){
+    const existing = products.find(x => x.id === editingProductId);
+    image_url = existing ? (existing.image_url || "") : "";
+    oldImageUrl = image_url;
+  }
   if (imageFile){
     showToast("Fotoğraf yükleniyor…");
     try{
       image_url = await uploadProductImage(imageFile);
+      if (oldImageUrl && oldImageUrl.includes("/product-images/")){
+        const oldPath = oldImageUrl.split("/product-images/")[1];
+        if (oldPath) sb.storage.from("product-images").remove([oldPath]).catch(()=>{});
+      }
     }catch(err){
       showToast("Fotoğraf yüklenemedi: " + err.message);
       return;
     }
   }
 
-  const { error } = await sb.from("products").insert({ name, price, stock, category, image_url, description });
-  if (error){ showToast("Eklenemedi: " + error.message); return; }
+  let error;
+  if (editingProductId){
+    ({ error } = await sb.from("products").update({ name, price, cost, stock, category, image_url, description }).eq("id", editingProductId));
+  } else {
+    ({ error } = await sb.from("products").insert({ name, price, cost, stock, category, image_url, description }));
+  }
+  if (error){ showToast("Kaydedilemedi: " + error.message); return; }
 
-  ["pName","pPrice","pStock","pDesc"].forEach(id => document.getElementById(id).value = "");
-  document.getElementById("pImageFile").value = "";
-  document.getElementById("pImagePreview").style.display = "none";
-  document.getElementById("pCategory").selectedIndex = 0;
-  showToast("Ürün eklendi");
+  const wasEditing = !!editingProductId;
+  cancelEdit();
+  showToast(wasEditing ? "Ürün güncellendi" : "Ürün eklendi");
   switchTab("products");
   loadAdminData();
 }
