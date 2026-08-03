@@ -462,6 +462,13 @@ let products = [];
 let cart = loadCartFromStorage();
 let activeCategory = "Tümü";
 let editingProductId = null;
+const NEW_ARRIVAL_DAYS = 7;
+
+function isNewProduct(p){
+  if (!p.created_at) return false;
+  const days = (Date.now() - new Date(p.created_at).getTime()) / 86400000;
+  return days <= NEW_ARRIVAL_DAYS;
+}
 
 function loadCartFromStorage(){
   try{
@@ -500,10 +507,13 @@ function renderCategoryBar(){
   });
   const cats = Object.keys(counts).sort((a,b) => a.localeCompare(b,"tr"));
 
-  if (!cats.includes(activeCategory) && activeCategory !== "Tümü") activeCategory = "Tümü";
+  if (!cats.includes(activeCategory) && activeCategory !== "Tümü" && activeCategory !== "__NEW__") activeCategory = "Tümü";
+
+  const newCount = products.filter(isNewProduct).length;
 
   const pills = [
     `<button class="cat-pill ${activeCategory==='Tümü'?'active':''}" onclick="filterCategory('Tümü')">Tümü <span class="count">${products.length}</span></button>`,
+    ...(newCount > 0 ? [`<button class="cat-pill ${activeCategory==='__NEW__'?'active':''}" onclick="filterCategory('__NEW__')" style="border-color:var(--accent);color:${activeCategory==='__NEW__'?'#fff':'var(--accent-dark)'};">🆕 Yeni Gelenler <span class="count">${newCount}</span></button>`] : []),
     ...cats.map(c => `<button class="cat-pill ${activeCategory===c?'active':''}" onclick="filterCategory('${c.replace(/'/g,"\\'")}')">${escapeHtml(c)} <span class="count">${counts[c]}</span></button>`)
   ];
   bar.innerHTML = pills.join("");
@@ -523,7 +533,9 @@ function renderGrid(){
   }
   const visible = (activeCategory === "Tümü"
     ? products
-    : products.filter(p => (p.category || "Genel").trim() === activeCategory)
+    : activeCategory === "__NEW__"
+      ? products.filter(isNewProduct)
+      : products.filter(p => (p.category || "Genel").trim() === activeCategory)
   ).filter(p => {
     const q = (document.getElementById("searchBox")?.value || "").trim().toLocaleLowerCase("tr");
     if (!q) return true;
@@ -536,7 +548,10 @@ function renderGrid(){
   }
   grid.innerHTML = visible.map(p => `
     <div class="card">
-      <div class="card-img" onclick="openProductDetail('${p.id}')"><img src="${p.image_url || 'https://picsum.photos/seed/'+p.id+'/600/600'}" alt="${escapeHtml(p.name)}"></div>
+      <div class="card-img" onclick="openProductDetail('${p.id}')" style="position:relative;">
+        ${isNewProduct(p) ? `<span style="position:absolute;top:10px;left:10px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;z-index:1;">YENİ</span>` : ""}
+        <img src="${p.image_url || 'https://picsum.photos/seed/'+p.id+'/600/600'}" alt="${escapeHtml(p.name)}">
+      </div>
       <div class="card-body">
         <div class="card-cat">${escapeHtml(p.category || "Genel")}</div>
         <h3 class="card-name" onclick="openProductDetail('${p.id}')">${escapeHtml(p.name)}</h3>
