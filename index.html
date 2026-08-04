@@ -685,8 +685,8 @@ async function sendOrder(){
   await loadProducts();
 
   let msg = `Merhaba, laylaylom üzerinden sipariş vermek istiyorum:\n\n`;
-  cart.forEach(c => { msg += `• ${c.name} x${c.qty} — ${formatPrice(c.price*c.qty)}\n`; });
-  msg += `\nToplam: ${formatPrice(total)}\nAd: ${name}\nTelefon: ${phone}`;
+  cart.forEach((c,i) => { msg += `${i+1}) ${c.name} — ${c.qty} adet x ${formatPrice(c.price)} = ${formatPrice(c.price*c.qty)}\n`; });
+  msg += `\n*Toplam: ${formatPrice(total)}*\n\nAd Soyad: ${name}\nTelefon: ${phone}`;
 
   window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, "_blank");
 
