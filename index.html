@@ -416,11 +416,16 @@
             <option value="Hırdavat & Bahçe">Hırdavat &amp; Bahçe</option>
             <option value="Kamp & Outdoor">Kamp &amp; Outdoor</option>
             <option value="Ev & Yaşam">Ev &amp; Yaşam</option>
+            <option value="Oyuncak & Hediyelik">Oyuncak &amp; Hediyelik</option>
+            <option value="Oto & Aksesuar">Oto &amp; Aksesuar</option>
+            <option value="Sağlık & Kişisel Bakım">Sağlık &amp; Kişisel Bakım</option>
             <option value="Diğer">Diğer</option>
           </select>
           <div class="full">
-            <input type="file" accept="image/*" id="pImageFile" class="field" style="padding:9px;" onchange="previewImage(event)">
-            <img id="pImagePreview" style="display:none;width:90px;height:90px;object-fit:cover;border-radius:10px;margin-top:8px;">
+            <div id="existingImagesList" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"></div>
+            <input type="file" accept="image/*" id="pImageFile" class="field" style="padding:9px;" multiple onchange="previewImage(event)">
+            <div id="pImagePreviewList" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"></div>
+            <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">Birden fazla fotoğraf seçebilirsiniz. Yeni seçtikleriniz mevcut fotoğrafların üzerine eklenir, silmez.</div>
           </div>
           <textarea class="field full" id="pDesc" placeholder="Açıklama"></textarea>
         </div>
@@ -435,6 +440,7 @@
   <div class="modal detail-modal" style="position:relative;">
     <button class="detail-close" onclick="closeProductDetail()">✕</button>
     <div class="detail-img"><img id="detailImg" src="" alt=""></div>
+    <div id="detailThumbs" style="display:flex;gap:8px;padding:10px 24px 0;flex-wrap:wrap;"></div>
     <div class="detail-body">
       <div class="card-cat" id="detailCat"></div>
       <h3 class="display" style="font-size:24px;margin:6px 0;" id="detailName"></h3>
@@ -462,6 +468,8 @@ let products = [];
 let cart = loadCartFromStorage();
 let activeCategory = "Tümü";
 let editingProductId = null;
+let currentEditImages = []; // mevcut ürün görselleri (düzenlerken korunur)
+let cardImageIndex = {}; // ana sayfada her ürünün hangi fotoğrafta olduğu
 const NEW_ARRIVAL_DAYS = 7;
 
 function isNewProduct(p){
@@ -507,14 +515,18 @@ function renderCategoryBar(){
   });
   const cats = Object.keys(counts).sort((a,b) => a.localeCompare(b,"tr"));
 
-  if (!cats.includes(activeCategory) && activeCategory !== "Tümü" && activeCategory !== "__NEW__") activeCategory = "Tümü";
+  if (!cats.includes(activeCategory) && activeCategory !== "Tümü" && activeCategory !== "__NEW__" && activeCategory !== "__SOLDOUT__" && activeCategory !== "__BESTSELLER__") activeCategory = "Tümü";
 
   const newCount = products.filter(isNewProduct).length;
+  const soldOutCount = products.filter(p => p.stock !== null && p.stock !== undefined && p.stock <= 0).length;
+  const bestSellerCount = products.filter(p => (p.sold_count||0) > 0).length;
 
   const pills = [
     `<button class="cat-pill ${activeCategory==='Tümü'?'active':''}" onclick="filterCategory('Tümü')">Tümü <span class="count">${products.length}</span></button>`,
     ...(newCount > 0 ? [`<button class="cat-pill ${activeCategory==='__NEW__'?'active':''}" onclick="filterCategory('__NEW__')" style="border-color:var(--accent);color:${activeCategory==='__NEW__'?'#fff':'var(--accent-dark)'};">🆕 Yeni Gelenler <span class="count">${newCount}</span></button>`] : []),
-    ...cats.map(c => `<button class="cat-pill ${activeCategory===c?'active':''}" onclick="filterCategory('${c.replace(/'/g,"\\'")}')">${escapeHtml(c)} <span class="count">${counts[c]}</span></button>`)
+    ...(bestSellerCount > 0 ? [`<button class="cat-pill ${activeCategory==='__BESTSELLER__'?'active':''}" onclick="filterCategory('__BESTSELLER__')" style="border-color:var(--mustard);color:${activeCategory==='__BESTSELLER__'?'#fff':'#a87c1f'};">🔥 Çok Satanlar <span class="count">${bestSellerCount}</span></button>`] : []),
+    ...cats.map(c => `<button class="cat-pill ${activeCategory===c?'active':''}" onclick="filterCategory('${c.replace(/'/g,"\\'")}')">${escapeHtml(c)} <span class="count">${counts[c]}</span></button>`),
+    ...(soldOutCount > 0 ? [`<button class="cat-pill ${activeCategory==='__SOLDOUT__'?'active':''}" onclick="filterCategory('__SOLDOUT__')" style="border-color:var(--ink-soft);color:${activeCategory==='__SOLDOUT__'?'#fff':'var(--ink-soft)'};">🚫 Tükenenler <span class="count">${soldOutCount}</span></button>`] : [])
   ];
   bar.innerHTML = pills.join("");
 }
@@ -535,7 +547,11 @@ function renderGrid(){
     ? products
     : activeCategory === "__NEW__"
       ? products.filter(isNewProduct)
-      : products.filter(p => (p.category || "Genel").trim() === activeCategory)
+      : activeCategory === "__SOLDOUT__"
+        ? products.filter(p => p.stock !== null && p.stock !== undefined && p.stock <= 0)
+        : activeCategory === "__BESTSELLER__"
+          ? products.filter(p => (p.sold_count||0) > 0).sort((a,b) => (b.sold_count||0)-(a.sold_count||0))
+          : products.filter(p => (p.category || "Genel").trim() === activeCategory)
   ).filter(p => {
     const q = (document.getElementById("searchBox")?.value || "").trim().toLocaleLowerCase("tr");
     if (!q) return true;
@@ -546,11 +562,21 @@ function renderGrid(){
     grid.innerHTML = `<div class="empty-state">Aradığınız kriterlere uygun ürün yok.</div>`;
     return;
   }
-  grid.innerHTML = visible.map(p => `
+  grid.innerHTML = visible.map(p => {
+    const gallery = (Array.isArray(p.images) && p.images.length) ? p.images : (p.image_url ? [p.image_url] : []);
+    const idx = cardImageIndex[p.id] || 0;
+    const shown = gallery[idx] || gallery[0] || 'https://picsum.photos/seed/'+p.id+'/600/600';
+    return `
     <div class="card">
       <div class="card-img" onclick="openProductDetail('${p.id}')" style="position:relative;">
         ${isNewProduct(p) ? `<span style="position:absolute;top:10px;left:10px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;z-index:1;">YENİ</span>` : ""}
-        <img src="${p.image_url || 'https://picsum.photos/seed/'+p.id+'/600/600'}" alt="${escapeHtml(p.name)}">
+        ${(p.sold_count||0) >= 3 ? `<span style="position:absolute;top:10px;right:10px;background:var(--mustard);color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;z-index:1;">🔥 Çok Satan</span>` : ""}
+        <img id="cardImg-${p.id}" src="${shown}" alt="${escapeHtml(p.name)}">
+        ${gallery.length > 1 ? `
+          <button onclick="changeCardImage(event,'${p.id}',-1)" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.45);color:#fff;width:28px;height:28px;border-radius:50%;font-size:16px;z-index:2;">‹</button>
+          <button onclick="changeCardImage(event,'${p.id}',1)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.45);color:#fff;width:28px;height:28px;border-radius:50%;font-size:16px;z-index:2;">›</button>
+          <span style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,.45);color:#fff;font-size:10px;padding:2px 7px;border-radius:999px;z-index:2;">${idx+1}/${gallery.length}</span>
+        ` : ""}
       </div>
       <div class="card-body">
         <div class="card-cat">${escapeHtml(p.category || "Genel")}</div>
@@ -559,24 +585,49 @@ function renderGrid(){
         ${p.stock !== null && p.stock <= 3 && p.stock > 0 ? `<div class="stock-warn">Son ${p.stock} adet!</div>` : ""}
         ${p.stock !== null && p.stock <= 0 ? `<div class="stock-warn">Stokta yok</div>` : ""}
         <div class="card-footer">
-          <span class="price">${formatPrice(p.price)}</span>
+          <span class="price">${p.stock !== null && p.stock <= 0 ? "" : formatPrice(p.price)}</span>
           <button class="add-btn" ${p.stock !== null && p.stock <= 0 ? "disabled style=\"opacity:.5;cursor:not-allowed;\"" : ""} onclick="addToCart('${p.id}')">${p.stock !== null && p.stock <= 0 ? "Stokta Yok" : "Sepete Ekle"}</button>
         </div>
       </div>
     </div>
-  `).join("");
+  `;
+  }).join("");
+}
+
+function changeCardImage(event, id, delta){
+  event.stopPropagation();
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+  const gallery = (Array.isArray(p.images) && p.images.length) ? p.images : (p.image_url ? [p.image_url] : []);
+  if (gallery.length < 2) return;
+  let idx = (cardImageIndex[id] || 0) + delta;
+  if (idx < 0) idx = gallery.length - 1;
+  if (idx >= gallery.length) idx = 0;
+  cardImageIndex[id] = idx;
+  const imgEl = document.getElementById('cardImg-'+id);
+  if (imgEl) imgEl.src = gallery[idx];
+  const counterEl = imgEl?.parentElement?.querySelector('span');
+  if (counterEl) counterEl.textContent = `${idx+1}/${gallery.length}`;
 }
 
 function openProductDetail(id){
   const p = products.find(x => x.id === id);
   if (!p) return;
-  document.getElementById("detailImg").src = p.image_url || 'https://picsum.photos/seed/'+p.id+'/600/600';
+  const gallery = (Array.isArray(p.images) && p.images.length) ? p.images : (p.image_url ? [p.image_url] : []);
+  const fallback = 'https://picsum.photos/seed/'+p.id+'/600/600';
+  document.getElementById("detailImg").src = gallery[0] || fallback;
+  const thumbsEl = document.getElementById("detailThumbs");
+  if (gallery.length > 1){
+    thumbsEl.innerHTML = gallery.map((url,i) => `<img src="${url}" onclick="document.getElementById('detailImg').src='${url}'" style="width:56px;height:56px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid ${i===0?'var(--ink)':'transparent'};" onload="this.style.opacity=1">`).join("");
+  } else {
+    thumbsEl.innerHTML = "";
+  }
   document.getElementById("detailCat").textContent = p.category || "Genel";
   document.getElementById("detailName").textContent = p.name;
   document.getElementById("detailDesc").textContent = p.description || "";
-  document.getElementById("detailPrice").textContent = formatPrice(p.price);
-  const stockEl = document.getElementById("detailStock");
   const outOfStock = p.stock !== null && p.stock <= 0;
+  document.getElementById("detailPrice").textContent = outOfStock ? "" : formatPrice(p.price);
+  const stockEl = document.getElementById("detailStock");
   if (outOfStock) stockEl.textContent = "Stokta yok";
   else if (p.stock !== null && p.stock <= 3) stockEl.textContent = `Son ${p.stock} adet!`;
   else stockEl.textContent = "";
@@ -673,16 +724,6 @@ async function sendOrder(){
     status: "yeni"
   });
   if (error){ console.error(error); showToast("Sipariş kaydedilemedi, tekrar deneyin"); return; }
-
-  // Stoktan düş
-  for (const c of cart){
-    const p = products.find(x => x.id === c.id);
-    if (p && p.stock !== null && p.stock !== undefined){
-      const newStock = Math.max(0, p.stock - c.qty);
-      await sb.from("products").update({ stock: newStock }).eq("id", c.id);
-    }
-  }
-  await loadProducts();
 
   let msg = `Merhaba, laylaylom üzerinden sipariş vermek istiyorum:\n\n`;
   cart.forEach((c,i) => { msg += `${i+1}) ${c.name} — ${c.qty} adet x ${formatPrice(c.price)} = ${formatPrice(c.price*c.qty)}\n`; });
@@ -784,9 +825,28 @@ function renderAdminOrders(orders){
 }
 
 async function updateOrderStatus(id, status){
-  const { error } = await sb.from("orders").update({ status }).eq("id", id);
+  const { data: order, error: fetchErr } = await sb.from("orders").select("items,stock_deducted").eq("id", id).single();
+  if (fetchErr){ showToast("Hata: " + fetchErr.message); return; }
+
+  const updates = { status };
+
+  if (status === "tamamlandı" && !order.stock_deducted){
+    for (const item of (order.items || [])){
+      const p = products.find(x => x.id === item.id);
+      if (p){
+        const updatesForProduct = { sold_count: (p.sold_count || 0) + item.qty };
+        if (p.stock !== null && p.stock !== undefined){
+          updatesForProduct.stock = Math.max(0, p.stock - item.qty);
+        }
+        await sb.from("products").update(updatesForProduct).eq("id", item.id);
+      }
+    }
+    updates.stock_deducted = true;
+  }
+
+  const { error } = await sb.from("orders").update(updates).eq("id", id);
   if (error){ showToast("Güncellenemedi: " + error.message); return; }
-  showToast("Sipariş durumu güncellendi");
+  showToast(status === "tamamlandı" ? "Sipariş tamamlandı, stok güncellendi" : "Sipariş durumu güncellendi");
   loadAdminData();
 }
 
@@ -807,11 +867,24 @@ async function deleteProduct(id){
 }
 
 function previewImage(event){
-  const file = event.target.files[0];
-  const preview = document.getElementById("pImagePreview");
-  if (!file){ preview.style.display = "none"; return; }
-  preview.src = URL.createObjectURL(file);
-  preview.style.display = "block";
+  const files = Array.from(event.target.files || []);
+  const list = document.getElementById("pImagePreviewList");
+  list.innerHTML = files.map(f => `<img src="${URL.createObjectURL(f)}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;">`).join("");
+}
+
+function renderExistingImages(){
+  const list = document.getElementById("existingImagesList");
+  list.innerHTML = currentEditImages.map((url,i) => `
+    <div style="position:relative;">
+      <img src="${url}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;">
+      <button type="button" onclick="removeExistingImage(${i})" style="position:absolute;top:-6px;right:-6px;background:var(--accent);color:#fff;width:20px;height:20px;border-radius:50%;font-size:12px;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>
+  `).join("");
+}
+
+function removeExistingImage(idx){
+  currentEditImages.splice(idx, 1);
+  renderExistingImages();
 }
 
 async function uploadProductImage(file){
@@ -833,13 +906,9 @@ function editProduct(id){
   document.getElementById("pStock").value = p.stock ?? "";
   document.getElementById("pCategory").value = p.category || "Diğer";
   document.getElementById("pDesc").value = p.description || "";
-  if (p.image_url){
-    document.getElementById("pImagePreview").src = p.image_url;
-    document.getElementById("pImagePreview").style.display = "block";
-  } else {
-    document.getElementById("pImagePreview").removeAttribute("src");
-    document.getElementById("pImagePreview").style.display = "none";
-  }
+  currentEditImages = (Array.isArray(p.images) && p.images.length) ? [...p.images] : (p.image_url ? [p.image_url] : []);
+  renderExistingImages();
+  document.getElementById("pImagePreviewList").innerHTML = "";
   document.getElementById("productFormTitle").textContent = "Ürünü Düzenle";
   document.getElementById("productFormBtn").textContent = "Değişiklikleri Kaydet";
   document.getElementById("cancelEditBtn").style.display = "block";
@@ -848,9 +917,11 @@ function editProduct(id){
 
 function cancelEdit(){
   editingProductId = null;
+  currentEditImages = [];
   ["pName","pPrice","pCost","pStock","pDesc"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("pImageFile").value = "";
-  document.getElementById("pImagePreview").style.display = "none";
+  document.getElementById("pImagePreviewList").innerHTML = "";
+  document.getElementById("existingImagesList").innerHTML = "";
   document.getElementById("pCategory").selectedIndex = 0;
   document.getElementById("productFormTitle").textContent = "Yeni Ürün";
   document.getElementById("productFormBtn").textContent = "Ürünü Ekle";
@@ -863,25 +934,17 @@ async function addProduct(){
   const cost = parseFloat(document.getElementById("pCost").value) || 0;
   const stock = parseInt(document.getElementById("pStock").value) || 0;
   const category = document.getElementById("pCategory").value.trim();
-  const imageFile = document.getElementById("pImageFile").files[0];
+  const imageFiles = Array.from(document.getElementById("pImageFile").files || []);
   const description = document.getElementById("pDesc").value.trim();
 
   if (!name || isNaN(price)){ showToast("Ürün adı ve fiyat zorunlu"); return; }
 
-  let image_url = "";
-  let oldImageUrl = "";
-  if (editingProductId){
-    const existing = products.find(x => x.id === editingProductId);
-    image_url = existing ? (existing.image_url || "") : "";
-    oldImageUrl = image_url;
-  }
-  if (imageFile){
-    showToast("Fotoğraf yükleniyor…");
+  let newUrls = [];
+  if (imageFiles.length){
+    showToast("Fotoğraflar yükleniyor…");
     try{
-      image_url = await uploadProductImage(imageFile);
-      if (oldImageUrl && oldImageUrl.includes("/product-images/")){
-        const oldPath = oldImageUrl.split("/product-images/")[1];
-        if (oldPath) sb.storage.from("product-images").remove([oldPath]).catch(()=>{});
+      for (const f of imageFiles){
+        newUrls.push(await uploadProductImage(f));
       }
     }catch(err){
       showToast("Fotoğraf yüklenemedi: " + err.message);
@@ -889,11 +952,14 @@ async function addProduct(){
     }
   }
 
+  const finalImages = [...currentEditImages, ...newUrls];
+  const image_url = finalImages[0] || "";
+
   let error;
   if (editingProductId){
-    ({ error } = await sb.from("products").update({ name, price, cost, stock, category, image_url, description }).eq("id", editingProductId));
+    ({ error } = await sb.from("products").update({ name, price, cost, stock, category, image_url, images: finalImages, description }).eq("id", editingProductId));
   } else {
-    ({ error } = await sb.from("products").insert({ name, price, cost, stock, category, image_url, description }));
+    ({ error } = await sb.from("products").insert({ name, price, cost, stock, category, image_url, images: finalImages, description }));
   }
   if (error){ showToast("Kaydedilemedi: " + error.message); return; }
 
