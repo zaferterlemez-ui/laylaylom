@@ -380,7 +380,7 @@
     <div class="admin-tabs">
       <button class="admin-tab active" data-tab="products" onclick="switchTab('products')">Ürünler</button>
       <button class="admin-tab" data-tab="orders" onclick="switchTab('orders')">Siparişler</button>
-      <button class="admin-tab" data-tab="addProduct" onclick="cancelEdit(); switchTab('addProduct')">+ Ürün Ekle</button>
+      <button class="admin-tab" data-tab="addProduct" onclick="if(document.getElementById('tab-addProduct').style.display!=='block'){cancelEdit();} switchTab('addProduct')">+ Ürün Ekle</button>
     </div>
 
     <div id="tab-products">
