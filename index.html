@@ -321,7 +321,14 @@
     <div id="katalog" class="section-title">
       <h2>Ürünler</h2>
     </div>
-    <input class="field" id="searchBox" placeholder="🔍 Ürün ara…" style="max-width:320px;margin-bottom:18px;" oninput="renderGrid()">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
+      <input class="field" id="searchBox" placeholder="🔍 Ürün ara…" style="max-width:320px;margin-bottom:0;" oninput="renderGrid()">
+      <select class="field" id="sortSelect" style="max-width:220px;margin-bottom:0;" onchange="renderGrid()">
+        <option value="default">Sırala: Varsayılan</option>
+        <option value="price_asc">Fiyat: Düşükten Yükseğe</option>
+        <option value="price_desc">Fiyat: Yüksekten Düşüğe</option>
+      </select>
+    </div>
     <div id="categoryBar" class="category-bar"></div>
     <div id="productGrid" class="grid">
       <div class="empty-state">Ürünler yükleniyor…</div>
@@ -338,7 +345,10 @@
 <div class="drawer" id="cartDrawer">
   <div class="drawer-header">
     <h3>Sepetin</h3>
-    <button class="close-x" onclick="closeCart()">✕</button>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <button class="link-btn" id="clearCartBtn" onclick="clearCart()" style="display:none;">Boşalt</button>
+      <button class="close-x" onclick="closeCart()">✕</button>
+    </div>
   </div>
   <div class="drawer-body" id="cartBody"></div>
   <div class="drawer-footer">
@@ -390,6 +400,7 @@
     </div>
 
     <div id="tab-products">
+      <input class="field" id="adminProductSearch" placeholder="🔍 Ürünlerde ara…" style="max-width:320px;margin-bottom:14px;" oninput="renderAdminProducts()">
       <div style="overflow-x:auto;">
       <table>
         <thead><tr><th>Görsel</th><th>Ürün</th><th>Kategori</th><th>Satış</th><th>Maliyet</th><th>Kâr/adet</th><th>Stok</th><th></th></tr></thead>
@@ -508,7 +519,28 @@ async function loadProducts(){
   const { data, error } = await sb.from("products").select("*").order("created_at", { ascending:false });
   if (error){ console.error(error); showToast("Ürünler yüklenemedi"); return; }
   products = data || [];
+  syncCartWithProducts();
   renderGrid();
+}
+
+function syncCartWithProducts(){
+  if (!cart.length) return;
+  let changed = false;
+  cart = cart.filter(c => {
+    const p = products.find(x => x.id === c.id);
+    if (!p){ changed = true; return false; } // ürün artık yok, sepetten çıkar
+    if (p.price !== c.price){ c.price = p.price; changed = true; }
+    c.stock = p.stock;
+    if (p.stock !== null && p.stock !== undefined){
+      if (p.stock <= 0){ changed = true; return false; } // stokta kalmadı, sepetten çıkar
+      if (c.qty > p.stock){ c.qty = p.stock; changed = true; }
+    }
+    return true;
+  });
+  if (changed){
+    showToast("Sepetiniz güncel fiyat/stok bilgisine göre yenilendi");
+    saveCartToStorage();
+  }
 }
 
 function renderCategoryBar(){
@@ -564,6 +596,10 @@ function renderGrid(){
     if (!q) return true;
     return (p.name||"").toLocaleLowerCase("tr").includes(q) || (p.description||"").toLocaleLowerCase("tr").includes(q);
   });
+
+  const sortMode = document.getElementById("sortSelect")?.value || "default";
+  if (sortMode === "price_asc") visible.sort((a,b) => a.price - b.price);
+  if (sortMode === "price_desc") visible.sort((a,b) => b.price - a.price);
 
   if (!visible.length){
     grid.innerHTML = `<div class="empty-state">Aradığınız kriterlere uygun ürün yok.</div>`;
@@ -678,9 +714,16 @@ function removeFromCart(id){
   cart = cart.filter(c => c.id !== id);
   updateCartUI();
 }
+function clearCart(){
+  if (!cart.length) return;
+  if (!confirm("Sepeti tamamen boşaltmak istediğinize emin misiniz?")) return;
+  cart = [];
+  updateCartUI();
+}
 function updateCartUI(){
   saveCartToStorage();
   document.getElementById("cartCount").textContent = cart.reduce((s,c)=>s+c.qty,0);
+  document.getElementById("clearCartBtn").style.display = cart.length ? "inline" : "none";
   const body = document.getElementById("cartBody");
   if (!cart.length){
     body.innerHTML = `<div class="empty-state">Sepetin boş.</div>`;
@@ -807,7 +850,9 @@ async function loadAdminData(){
 }
 
 function renderAdminProducts(){
-  document.getElementById("adminProductsBody").innerHTML = products.map(p => {
+  const q = (document.getElementById("adminProductSearch")?.value || "").trim().toLocaleLowerCase("tr");
+  const filtered = q ? products.filter(p => (p.name||"").toLocaleLowerCase("tr").includes(q)) : products;
+  document.getElementById("adminProductsBody").innerHTML = filtered.map(p => {
     const profit = Number(p.price||0) - Number(p.cost||0);
     return `
     <tr>
@@ -824,7 +869,7 @@ function renderAdminProducts(){
       </td>
     </tr>
   `;
-  }).join("") || `<tr><td colspan="8">Ürün yok</td></tr>`;
+  }).join("") || `<tr><td colspan="8">${q ? "Aramanıza uygun ürün yok" : "Ürün yok"}</td></tr>`;
 }
 
 const ORDER_STATUSES = ["yeni","onaylandı","kargoda","tamamlandı","iptal"];
@@ -869,6 +914,20 @@ async function updateOrderStatus(id, status){
       }
     }
     updates.stock_deducted = true;
+  }
+
+  if (status === "iptal" && order.stock_deducted){
+    for (const item of (order.items || [])){
+      const p = products.find(x => x.id === item.id);
+      if (p){
+        const updatesForProduct = { sold_count: Math.max(0, (p.sold_count || 0) - item.qty) };
+        if (p.stock !== null && p.stock !== undefined){
+          updatesForProduct.stock = p.stock + item.qty;
+        }
+        await sb.from("products").update(updatesForProduct).eq("id", item.id);
+      }
+    }
+    updates.stock_deducted = false;
   }
 
   const { error } = await sb.from("orders").update(updates).eq("id", id);
