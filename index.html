@@ -436,6 +436,7 @@
             <option value="Oyuncak & Hediyelik">Oyuncak &amp; Hediyelik</option>
             <option value="Oto & Aksesuar">Oto &amp; Aksesuar</option>
             <option value="Sağlık & Kişisel Bakım">Sağlık &amp; Kişisel Bakım</option>
+            <option value="Saat, Takı & Gözlük">Saat, Takı &amp; Gözlük</option>
             <option value="Diğer">Diğer</option>
           </select>
           <div class="full">
@@ -618,7 +619,7 @@ function renderGrid(){
         ${gallery.length > 1 ? `
           <button onclick="changeCardImage(event,'${p.id}',-1)" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.45);color:#fff;width:28px;height:28px;border-radius:50%;font-size:16px;z-index:2;">‹</button>
           <button onclick="changeCardImage(event,'${p.id}',1)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.45);color:#fff;width:28px;height:28px;border-radius:50%;font-size:16px;z-index:2;">›</button>
-          <span style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,.45);color:#fff;font-size:10px;padding:2px 7px;border-radius:999px;z-index:2;">${idx+1}/${gallery.length}</span>
+          <span id="counter-${p.id}" style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,.45);color:#fff;font-size:10px;padding:2px 7px;border-radius:999px;z-index:2;">${idx+1}/${gallery.length}</span>
         ` : ""}
       </div>
       <div class="card-body">
@@ -649,7 +650,7 @@ function changeCardImage(event, id, delta){
   cardImageIndex[id] = idx;
   const imgEl = document.getElementById('cardImg-'+id);
   if (imgEl) imgEl.src = gallery[idx];
-  const counterEl = imgEl?.parentElement?.querySelector('span');
+  const counterEl = document.getElementById('counter-'+id);
   if (counterEl) counterEl.textContent = `${idx+1}/${gallery.length}`;
 }
 
