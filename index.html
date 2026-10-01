@@ -354,7 +354,6 @@
   <div class="drawer-footer">
     <div class="total-row"><span>Toplam</span><span id="cartTotal">0 ₺</span></div>
     <input class="field" id="custName" placeholder="Adınız Soyadınız">
-    <input class="field" id="custPhone" placeholder="Telefon numaranız">
     <button class="whatsapp-btn" id="orderBtn" onclick="sendOrder()">📲 WhatsApp'tan Sipariş Ver</button>
   </div>
 </div>
@@ -395,7 +394,7 @@
 
     <div class="admin-tabs">
       <button class="admin-tab active" data-tab="products" onclick="switchTab('products')">Ürünler</button>
-      <button class="admin-tab" data-tab="orders" onclick="switchTab('orders')">Siparişler</button>
+      <button class="admin-tab" data-tab="orders" onclick="switchTab('orders')">Siparişler <span id="newOrderBadge" style="display:none;background:var(--accent);color:#fff;border-radius:999px;padding:1px 8px;font-size:11px;margin-left:4px;">0</span></button>
       <button class="admin-tab" data-tab="addProduct" onclick="if(document.getElementById('tab-addProduct').style.display!=='block'){cancelEdit();} switchTab('addProduct')">+ Ürün Ekle</button>
     </div>
 
@@ -762,24 +761,20 @@ function closeCart(){
 async function sendOrder(){
   if (!cart.length) return;
   const name = document.getElementById("custName").value.trim();
-  const phone = document.getElementById("custPhone").value.trim();
-  if (!name || !phone){ showToast("Lütfen adınızı ve telefonunuzu girin"); return; }
-  const phoneDigits = phone.replace(/\D/g,"");
-  if (phoneDigits.length < 10){ showToast("Lütfen geçerli bir telefon numarası girin"); return; }
+  if (!name){ showToast("Lütfen adınızı girin"); return; }
 
   const total = cart.reduce((s,c)=>s+c.price*c.qty,0);
   const { error } = await sb.from("orders").insert({
     items: cart.map(c => ({ id:c.id, name:c.name, price:c.price, cost:c.cost||0, qty:c.qty })),
     total,
     customer_name: name,
-    customer_phone: phone,
     status: "yeni"
   });
   if (error){ console.error(error); showToast("Sipariş kaydedilemedi, tekrar deneyin"); return; }
 
   let msg = `Merhaba, laylaylom üzerinden sipariş vermek istiyorum:\n\n`;
   cart.forEach((c,i) => { msg += `${i+1}) ${c.name} — ${c.qty} adet x ${formatPrice(c.price)} = ${formatPrice(c.price*c.qty)}\n`; });
-  msg += `\n*Toplam: ${formatPrice(total)}*\n\nAd Soyad: ${name}\nTelefon: ${phone}`;
+  msg += `\n*Toplam: ${formatPrice(total)}*\n\nAd Soyad: ${name}`;
 
   window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, "_blank");
 
@@ -803,14 +798,51 @@ async function doLogin(){
 }
 async function doLogout(){
   await sb.auth.signOut();
+  if (orderChannel){ sb.removeChannel(orderChannel); orderChannel = null; }
   document.getElementById("adminPanel").classList.remove("open");
   document.getElementById("publicSite").style.display = "block";
 }
+
+let orderChannel = null;
 
 async function showAdmin(){
   document.getElementById("publicSite").style.display = "none";
   document.getElementById("adminPanel").classList.add("open");
   await loadAdminData();
+  subscribeToNewOrders();
+  if (window.Notification && Notification.permission === "default"){
+    Notification.requestPermission().catch(()=>{});
+  }
+}
+
+function subscribeToNewOrders(){
+  if (orderChannel) return; // zaten dinleniyor
+  orderChannel = sb
+    .channel("orders-watch")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
+      playNotificationSound();
+      showToast("🔔 Yeni sipariş geldi: " + (payload.new.customer_name || ""));
+      if (window.Notification && Notification.permission === "granted"){
+        try { new Notification("laylaylom — Yeni Sipariş!", { body: (payload.new.customer_name||"Bir müşteri") + " sipariş verdi." }); } catch(e){}
+      }
+      loadAdminData();
+    })
+    .subscribe();
+}
+
+function playNotificationSound(){
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880;
+    g.gain.setValueAtTime(0.15, ctx.currentTime);
+    o.start();
+    o.frequency.setValueAtTime(660, ctx.currentTime + 0.15);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    o.stop(ctx.currentTime + 0.4);
+  }catch(e){}
 }
 
 // ============ ADMIN DATA ============
@@ -823,6 +855,12 @@ async function loadAdminData(){
 
   document.getElementById("statProducts").textContent = products.length;
   document.getElementById("statOrders").textContent = (orders||[]).length;
+  const newCount = (orders||[]).filter(o => o.status === "yeni").length;
+  const badgeEl = document.getElementById("newOrderBadge");
+  if (badgeEl){
+    badgeEl.textContent = newCount;
+    badgeEl.style.display = newCount > 0 ? "inline" : "none";
+  }
   const validOrders = (orders||[]).filter(o => o.status !== "iptal");
   const revenue = validOrders.reduce((s,o)=>s+Number(o.total||0),0);
   const profit = validOrders.reduce((s,o)=> s + (o.items||[]).reduce((is,i)=> is + (Number(i.price||0)-Number(i.cost||0))*Number(i.qty||0), 0), 0);
