@@ -485,12 +485,16 @@
 
     <div id="tab-requests" style="display:none;">
       <div class="modal" style="max-width:480px;padding:24px;margin-bottom:20px;">
-        <h3 style="margin-bottom:16px;">Yeni Öneri Ekle (Oylama için)</h3>
+        <h3 style="margin-bottom:16px;" id="requestFormTitle">Yeni Öneri Ekle (Oylama için)</h3>
         <p class="sub">Eklemeyi düşündüğünüz ürünü buraya koyun, müşterileriniz oylasın.</p>
         <input class="field" id="reqName" placeholder="Ürün adı">
-        <input class="field" id="reqImage" placeholder="Görsel URL (opsiyonel)">
+        <div style="margin-bottom:10px;">
+          <img id="reqImagePreview" style="display:none;width:90px;height:90px;object-fit:cover;border-radius:10px;margin-bottom:8px;">
+          <input type="file" accept="image/*" id="reqImageFile" class="field" style="padding:9px;" onchange="previewRequestImage(event)">
+        </div>
         <textarea class="field" id="reqDesc" placeholder="Kısa açıklama (opsiyonel)"></textarea>
-        <button class="btn-primary" onclick="addProductRequest()">Öneriyi Ekle</button>
+        <button class="btn-primary" id="requestFormBtn" onclick="addProductRequest()">Öneriyi Ekle</button>
+        <button class="link-btn" id="cancelRequestEditBtn" style="display:none;margin-top:10px;" onclick="cancelRequestEdit()">Düzenlemeyi iptal et</button>
       </div>
       <div id="requestsListAdmin"></div>
     </div>
@@ -1351,22 +1355,82 @@ async function loadProductRequests(){
           <div style="font-size:12px;color:var(--ink-soft);">${voteCounts[r.id]||0} oy</div>
         </div>
       </div>
-      <button class="small-btn danger" onclick="deleteProductRequest('${r.id}')">Sil</button>
+      <div style="display:flex;gap:6px;">
+        <button class="small-btn" onclick='editProductRequest(${JSON.stringify(r).replace(/'/g,"&apos;")})'>Düzenle</button>
+        <button class="small-btn danger" onclick="deleteProductRequest('${r.id}')">Sil</button>
+      </div>
     </div>
   `).join("") || `<div class="empty-state">Henüz öneri eklenmedi</div>`;
 }
 
+let editingRequestId = null;
+let currentRequestImage = "";
+
+function previewRequestImage(event){
+  const file = event.target.files[0];
+  const preview = document.getElementById("reqImagePreview");
+  if (!file){ return; }
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = "block";
+}
+
+function editProductRequest(r){
+  editingRequestId = r.id;
+  currentRequestImage = r.image_url || "";
+  document.getElementById("reqName").value = r.name || "";
+  document.getElementById("reqDesc").value = r.description || "";
+  document.getElementById("reqImageFile").value = "";
+  if (currentRequestImage){
+    document.getElementById("reqImagePreview").src = currentRequestImage;
+    document.getElementById("reqImagePreview").style.display = "block";
+  } else {
+    document.getElementById("reqImagePreview").removeAttribute("src");
+    document.getElementById("reqImagePreview").style.display = "none";
+  }
+  document.getElementById("requestFormTitle").textContent = "Öneriyi Düzenle";
+  document.getElementById("requestFormBtn").textContent = "Değişiklikleri Kaydet";
+  document.getElementById("cancelRequestEditBtn").style.display = "block";
+}
+
+function cancelRequestEdit(){
+  editingRequestId = null;
+  currentRequestImage = "";
+  ["reqName","reqDesc"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("reqImageFile").value = "";
+  document.getElementById("reqImagePreview").style.display = "none";
+  document.getElementById("requestFormTitle").textContent = "Yeni Öneri Ekle (Oylama için)";
+  document.getElementById("requestFormBtn").textContent = "Öneriyi Ekle";
+  document.getElementById("cancelRequestEditBtn").style.display = "none";
+}
+
 async function addProductRequest(){
   const name = document.getElementById("reqName").value.trim();
-  const image_url = document.getElementById("reqImage").value.trim();
   const description = document.getElementById("reqDesc").value.trim();
+  const imageFile = document.getElementById("reqImageFile").files[0];
   if (!name){ showToast("Ürün adı zorunlu"); return; }
 
-  const { error } = await sb.from("product_requests").insert({ name, image_url, description });
-  if (error){ showToast("Eklenemedi: " + error.message); return; }
+  let image_url = currentRequestImage;
+  if (imageFile){
+    showToast("Fotoğraf yükleniyor…");
+    try{
+      image_url = await uploadProductImage(imageFile);
+    }catch(err){
+      showToast("Fotoğraf yüklenemedi: " + err.message);
+      return;
+    }
+  }
 
-  ["reqName","reqImage","reqDesc"].forEach(id => document.getElementById(id).value = "");
-  showToast("Öneri eklendi");
+  let error;
+  if (editingRequestId){
+    ({ error } = await sb.from("product_requests").update({ name, image_url, description }).eq("id", editingRequestId));
+  } else {
+    ({ error } = await sb.from("product_requests").insert({ name, image_url, description }));
+  }
+  if (error){ showToast("Kaydedilemedi: " + error.message); return; }
+
+  const wasEditing = !!editingRequestId;
+  cancelRequestEdit();
+  showToast(wasEditing ? "Öneri güncellendi" : "Öneri eklendi");
   loadProductRequests();
 }
 
