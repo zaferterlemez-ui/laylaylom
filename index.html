@@ -333,6 +333,12 @@
     <div id="productGrid" class="grid">
       <div class="empty-state">Ürünler yükleniyor…</div>
     </div>
+
+    <div id="requestsSection" style="display:none;margin-top:50px;">
+      <div class="section-title"><h2>🗳️ Hangi Ürünü Görmek İstersin?</h2></div>
+      <p style="color:var(--ink-soft);margin-bottom:20px;">Eklemeyi düşündüğümüz ürünler — en çok oy alan öncelikli olarak mağazaya eklenecek!</p>
+      <div id="requestsGrid" class="grid"></div>
+    </div>
   </main>
 
   <footer>
@@ -352,6 +358,12 @@
   </div>
   <div class="drawer-body" id="cartBody"></div>
   <div class="drawer-footer">
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <input class="field" id="discountCodeInput" placeholder="İndirim kodu (varsa)" style="margin-bottom:0;">
+      <button class="small-btn" onclick="applyDiscountCode()" style="white-space:nowrap;">Uygula</button>
+    </div>
+    <div id="discountMsg" style="font-size:12px;margin-bottom:10px;"></div>
+    <div class="total-row" id="subtotalRow" style="display:none;font-size:14px;font-weight:400;color:var(--ink-soft);"><span>Ara Toplam</span><span id="cartSubtotal">0 ₺</span></div>
     <div class="total-row"><span>Toplam</span><span id="cartTotal">0 ₺</span></div>
     <input class="field" id="custName" placeholder="Adınız Soyadınız">
     <button class="whatsapp-btn" id="orderBtn" onclick="sendOrder()">📲 WhatsApp'tan Sipariş Ver</button>
@@ -396,6 +408,9 @@
       <button class="admin-tab active" data-tab="products" onclick="switchTab('products')">Ürünler</button>
       <button class="admin-tab" data-tab="orders" onclick="switchTab('orders')">Siparişler <span id="newOrderBadge" style="display:none;background:var(--accent);color:#fff;border-radius:999px;padding:1px 8px;font-size:11px;margin-left:4px;">0</span></button>
       <button class="admin-tab" data-tab="addProduct" onclick="if(document.getElementById('tab-addProduct').style.display!=='block'){cancelEdit();} switchTab('addProduct')">+ Ürün Ekle</button>
+      <button class="admin-tab" data-tab="discounts" onclick="switchTab('discounts')">İndirim Kodları</button>
+      <button class="admin-tab" data-tab="requests" onclick="switchTab('requests')">Ürün İstekleri</button>
+      <button class="admin-tab" data-tab="qr" onclick="switchTab('qr')">QR Kod</button>
     </div>
 
     <div id="tab-products">
@@ -450,6 +465,43 @@
         <button class="link-btn" id="cancelEditBtn" style="display:none;margin-top:10px;" onclick="cancelEdit()">Düzenlemeyi iptal et</button>
       </div>
     </div>
+
+    <div id="tab-discounts" style="display:none;">
+      <div class="modal" style="max-width:420px;padding:24px;margin-bottom:20px;">
+        <h3 style="margin-bottom:16px;">Yeni İndirim Kodu</h3>
+        <input class="field" id="dcCode" placeholder="Kod (örn: HOSGELDIN10)" style="text-transform:uppercase;">
+        <input class="field" id="dcPercent" placeholder="İndirim yüzdesi (örn: 10)" type="number">
+        <input class="field" id="dcMaxUses" placeholder="Maksimum kullanım (boş = sınırsız)" type="number">
+        <button class="btn-primary" onclick="addDiscountCode()">Kodu Oluştur</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Kod</th><th>İndirim</th><th>Kullanım</th><th>Durum</th><th></th></tr></thead>
+          <tbody id="discountCodesBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="tab-requests" style="display:none;">
+      <div class="modal" style="max-width:480px;padding:24px;margin-bottom:20px;">
+        <h3 style="margin-bottom:16px;">Yeni Öneri Ekle (Oylama için)</h3>
+        <p class="sub">Eklemeyi düşündüğünüz ürünü buraya koyun, müşterileriniz oylasın.</p>
+        <input class="field" id="reqName" placeholder="Ürün adı">
+        <input class="field" id="reqImage" placeholder="Görsel URL (opsiyonel)">
+        <textarea class="field" id="reqDesc" placeholder="Kısa açıklama (opsiyonel)"></textarea>
+        <button class="btn-primary" onclick="addProductRequest()">Öneriyi Ekle</button>
+      </div>
+      <div id="requestsListAdmin"></div>
+    </div>
+
+    <div id="tab-qr" style="display:none;">
+      <div class="modal" style="max-width:360px;padding:28px;text-align:center;">
+        <h3 style="margin-bottom:14px;">Mağaza QR Kodu</h3>
+        <img id="qrCodeImg" style="width:220px;height:220px;margin:0 auto 14px;border-radius:12px;">
+        <p class="sub" style="margin-bottom:14px;">Bu kodu yazdırıp fiziksel ürünlerinizin yanına koyabilirsiniz — okutan kişi direkt mağazaya ulaşır.</p>
+        <a id="qrDownloadLink" class="btn-primary" style="display:block;text-decoration:none;" download="laylaylom-qr.png">İndir</a>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -471,6 +523,15 @@
   </div>
 </div>
 
+<div class="modal-bg" id="thankYouModal" onclick="if(event.target===this)closeThankYou()">
+  <div class="modal" style="text-align:center;">
+    <div style="font-size:48px;margin-bottom:10px;">🎉</div>
+    <h3>Teşekkürler, <span id="thankYouName"></span>!</h3>
+    <p class="sub">Siparişiniz alındı. WhatsApp'ta açılan mesajı gönderdiğinizden emin olun, en kısa sürede size dönüş yapacağız.</p>
+    <button class="btn-primary" onclick="closeThankYou()">Tamam</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -487,6 +548,21 @@ let activeCategory = "Tümü";
 let editingProductId = null;
 let currentEditImages = []; // mevcut ürün görselleri (düzenlerken korunur)
 let cardImageIndex = {}; // ana sayfada her ürünün hangi fotoğrafta olduğu
+let favorites = loadFavorites();
+
+function loadFavorites(){
+  try{ return JSON.parse(localStorage.getItem("laylaylom_favorites") || "[]"); }catch(e){ return []; }
+}
+function saveFavorites(){
+  try{ localStorage.setItem("laylaylom_favorites", JSON.stringify(favorites)); }catch(e){}
+}
+function toggleFavorite(event, id){
+  event.stopPropagation();
+  if (favorites.includes(id)) favorites = favorites.filter(x => x !== id);
+  else favorites.push(id);
+  saveFavorites();
+  renderGrid();
+}
 const NEW_ARRIVAL_DAYS = 7;
 
 function isNewProduct(p){
@@ -509,10 +585,54 @@ function saveCartToStorage(){
 document.addEventListener("DOMContentLoaded", async () => {
   await loadProducts();
   updateCartUI();
+  loadPublicRequests();
   sb.from("page_views").insert({}).then(()=>{}).catch(()=>{});
   const { data: { session } } = await sb.auth.getSession();
   if (session) showAdmin();
 });
+
+function getVoterId(){
+  let v = localStorage.getItem("laylaylom_voter_id");
+  if (!v){ v = 'v_' + Math.random().toString(36).slice(2) + Date.now(); localStorage.setItem("laylaylom_voter_id", v); }
+  return v;
+}
+
+async function loadPublicRequests(){
+  const { data: requests } = await sb.from("product_requests").select("*").order("created_at",{ascending:false});
+  if (!requests || !requests.length){ document.getElementById("requestsSection").style.display = "none"; return; }
+
+  const { data: allVotes } = await sb.from("product_request_votes").select("request_id,voter_id");
+  const voterId = getVoterId();
+  const voteCounts = {};
+  const myVotes = new Set();
+  (allVotes||[]).forEach(v => {
+    voteCounts[v.request_id] = (voteCounts[v.request_id]||0) + 1;
+    if (v.voter_id === voterId) myVotes.add(v.request_id);
+  });
+
+  document.getElementById("requestsSection").style.display = "block";
+  document.getElementById("requestsGrid").innerHTML = requests.map(r => `
+    <div class="card">
+      <div class="card-img"><img src="${r.image_url || 'https://picsum.photos/seed/'+r.id+'/600/600'}" alt="${escapeHtml(r.name)}"></div>
+      <div class="card-body">
+        <h3 class="card-name">${escapeHtml(r.name)}</h3>
+        <div class="card-desc">${escapeHtml(r.description || "")}</div>
+        <div class="card-footer">
+          <span style="font-weight:700;">${voteCounts[r.id]||0} oy</span>
+          <button class="add-btn" ${myVotes.has(r.id) ? 'disabled style="opacity:.5;cursor:not-allowed;"' : ''} onclick="voteForRequest('${r.id}')">${myVotes.has(r.id) ? "Oy Verildi ✓" : "👍 Oy Ver"}</button>
+        </div>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function voteForRequest(id){
+  const voterId = getVoterId();
+  const { error } = await sb.from("product_request_votes").insert({ request_id: id, voter_id: voterId });
+  if (error){ showToast("Zaten oy vermişsiniz veya bir hata oluştu"); return; }
+  showToast("Oyunuz kaydedildi, teşekkürler!");
+  loadPublicRequests();
+}
 
 // ============ PRODUCTS (PUBLIC) ============
 async function loadProducts(){
@@ -554,7 +674,7 @@ function renderCategoryBar(){
   });
   const cats = Object.keys(counts).sort((a,b) => a.localeCompare(b,"tr"));
 
-  if (!cats.includes(activeCategory) && activeCategory !== "Tümü" && activeCategory !== "__NEW__" && activeCategory !== "__SOLDOUT__" && activeCategory !== "__BESTSELLER__") activeCategory = "Tümü";
+  if (!cats.includes(activeCategory) && activeCategory !== "Tümü" && activeCategory !== "__NEW__" && activeCategory !== "__SOLDOUT__" && activeCategory !== "__BESTSELLER__" && activeCategory !== "__FAVORITES__") activeCategory = "Tümü";
 
   const newCount = products.filter(isNewProduct).length;
   const soldOutCount = products.filter(p => p.stock !== null && p.stock !== undefined && p.stock <= 0).length;
@@ -564,6 +684,7 @@ function renderCategoryBar(){
     `<button class="cat-pill ${activeCategory==='Tümü'?'active':''}" onclick="filterCategory('Tümü')">Tümü <span class="count">${products.length}</span></button>`,
     ...(newCount > 0 ? [`<button class="cat-pill ${activeCategory==='__NEW__'?'active':''}" onclick="filterCategory('__NEW__')" style="border-color:var(--accent);color:${activeCategory==='__NEW__'?'#fff':'var(--accent-dark)'};">🆕 Yeni Gelenler <span class="count">${newCount}</span></button>`] : []),
     ...(bestSellerCount > 0 ? [`<button class="cat-pill ${activeCategory==='__BESTSELLER__'?'active':''}" onclick="filterCategory('__BESTSELLER__')" style="border-color:var(--mustard);color:${activeCategory==='__BESTSELLER__'?'#fff':'#a87c1f'};">🔥 Çok Satanlar <span class="count">${bestSellerCount}</span></button>`] : []),
+    ...(favorites.length > 0 ? [`<button class="cat-pill ${activeCategory==='__FAVORITES__'?'active':''}" onclick="filterCategory('__FAVORITES__')">❤️ Favorilerim <span class="count">${favorites.length}</span></button>`] : []),
     ...cats.map(c => `<button class="cat-pill ${activeCategory===c?'active':''}" onclick="filterCategory('${c.replace(/'/g,"\\'")}')">${escapeHtml(c)} <span class="count">${counts[c]}</span></button>`),
     ...(soldOutCount > 0 ? [`<button class="cat-pill ${activeCategory==='__SOLDOUT__'?'active':''}" onclick="filterCategory('__SOLDOUT__')" style="border-color:var(--ink-soft);color:${activeCategory==='__SOLDOUT__'?'#fff':'var(--ink-soft)'};">🚫 Tükenenler <span class="count">${soldOutCount}</span></button>`] : [])
   ];
@@ -590,7 +711,9 @@ function renderGrid(){
         ? products.filter(p => p.stock !== null && p.stock !== undefined && p.stock <= 0)
         : activeCategory === "__BESTSELLER__"
           ? products.filter(p => (p.sold_count||0) > 0).sort((a,b) => (b.sold_count||0)-(a.sold_count||0))
-          : products.filter(p => (p.category || "Genel").trim() === activeCategory)
+          : activeCategory === "__FAVORITES__"
+            ? products.filter(p => favorites.includes(p.id))
+            : products.filter(p => (p.category || "Genel").trim() === activeCategory)
   ).filter(p => {
     const q = (document.getElementById("searchBox")?.value || "").trim().toLocaleLowerCase("tr");
     if (!q) return true;
@@ -614,6 +737,7 @@ function renderGrid(){
       <div class="card-img" onclick="openProductDetail('${p.id}')" style="position:relative;">
         ${isNewProduct(p) ? `<span style="position:absolute;top:10px;left:10px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;z-index:1;">YENİ</span>` : ""}
         ${(p.sold_count||0) >= 3 ? `<span style="position:absolute;top:10px;right:10px;background:var(--mustard);color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;z-index:1;">🔥 Çok Satan</span>` : ""}
+        <button onclick="toggleFavorite(event,'${p.id}')" style="position:absolute;bottom:8px;left:8px;background:rgba(255,255,255,.85);width:30px;height:30px;border-radius:50%;font-size:15px;z-index:2;display:flex;align-items:center;justify-content:center;">${favorites.includes(p.id) ? "❤️" : "🤍"}</button>
         <img id="cardImg-${p.id}" src="${shown}" alt="${escapeHtml(p.name)}">
         ${gallery.length > 1 ? `
           <button onclick="changeCardImage(event,'${p.id}',-1)" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.45);color:#fff;width:28px;height:28px;border-radius:50%;font-size:16px;z-index:2;">‹</button>
@@ -744,9 +868,45 @@ function updateCartUI(){
       </div>
     `).join("");
   }
-  const total = cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const subtotal = cart.reduce((s,c)=>s+c.price*c.qty,0);
+  let total = subtotal;
+  if (appliedDiscount){
+    total = subtotal * (1 - appliedDiscount.discount_percent/100);
+    document.getElementById("subtotalRow").style.display = "flex";
+    document.getElementById("cartSubtotal").textContent = formatPrice(subtotal);
+  } else {
+    document.getElementById("subtotalRow").style.display = "none";
+  }
   document.getElementById("cartTotal").textContent = formatPrice(total);
   document.getElementById("orderBtn").disabled = cart.length === 0;
+}
+
+let appliedDiscount = null;
+
+async function applyDiscountCode(){
+  const code = document.getElementById("discountCodeInput").value.trim().toUpperCase();
+  const msgEl = document.getElementById("discountMsg");
+  if (!code){ msgEl.textContent = ""; appliedDiscount = null; updateCartUI(); return; }
+
+  const { data, error } = await sb.from("discount_codes").select("*").eq("code", code).eq("active", true).maybeSingle();
+  if (error || !data){
+    msgEl.textContent = "Geçersiz indirim kodu";
+    msgEl.style.color = "var(--accent-dark)";
+    appliedDiscount = null;
+    updateCartUI();
+    return;
+  }
+  if (data.max_uses !== null && data.used_count >= data.max_uses){
+    msgEl.textContent = "Bu kodun kullanım limiti dolmuş";
+    msgEl.style.color = "var(--accent-dark)";
+    appliedDiscount = null;
+    updateCartUI();
+    return;
+  }
+  appliedDiscount = data;
+  msgEl.textContent = `✓ %${data.discount_percent} indirim uygulandı`;
+  msgEl.style.color = "#2a8a4a";
+  updateCartUI();
 }
 function openCart(){
   document.getElementById("overlay").classList.add("open");
@@ -763,7 +923,9 @@ async function sendOrder(){
   const name = document.getElementById("custName").value.trim();
   if (!name){ showToast("Lütfen adınızı girin"); return; }
 
-  const total = cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const subtotal = cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const total = appliedDiscount ? subtotal * (1 - appliedDiscount.discount_percent/100) : subtotal;
+
   const { error } = await sb.from("orders").insert({
     items: cart.map(c => ({ id:c.id, name:c.name, price:c.price, cost:c.cost||0, qty:c.qty })),
     total,
@@ -772,16 +934,33 @@ async function sendOrder(){
   });
   if (error){ console.error(error); showToast("Sipariş kaydedilemedi, tekrar deneyin"); return; }
 
+  if (appliedDiscount){
+    await sb.from("discount_codes").update({ used_count: (appliedDiscount.used_count||0) + 1 }).eq("id", appliedDiscount.id);
+  }
+
   let msg = `Merhaba, laylaylom üzerinden sipariş vermek istiyorum:\n\n`;
   cart.forEach((c,i) => { msg += `${i+1}) ${c.name} — ${c.qty} adet x ${formatPrice(c.price)} = ${formatPrice(c.price*c.qty)}\n`; });
+  if (appliedDiscount) msg += `\nAra Toplam: ${formatPrice(subtotal)}\nİndirim (%${appliedDiscount.discount_percent}): -${formatPrice(subtotal-total)}`;
   msg += `\n*Toplam: ${formatPrice(total)}*\n\nAd Soyad: ${name}`;
 
   window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, "_blank");
 
   cart = [];
+  appliedDiscount = null;
+  document.getElementById("discountCodeInput").value = "";
+  document.getElementById("discountMsg").textContent = "";
   updateCartUI();
   closeCart();
-  showToast("Siparişiniz alındı, WhatsApp açılıyor…");
+  showThankYou(name);
+}
+
+function showThankYou(name){
+  const el = document.getElementById("thankYouModal");
+  document.getElementById("thankYouName").textContent = name;
+  el.classList.add("open");
+}
+function closeThankYou(){
+  document.getElementById("thankYouModal").classList.remove("open");
 }
 
 // ============ ADMIN AUTH ============
@@ -1096,12 +1275,114 @@ async function addProduct(){
 }
 
 function switchTab(tab){
-  ["products","orders","addProduct"].forEach(t => {
+  ["products","orders","addProduct","discounts","requests","qr"].forEach(t => {
     document.getElementById("tab-"+t).style.display = (t===tab) ? "block" : "none";
   });
   document.querySelectorAll(".admin-tab").forEach(b => {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
+  if (tab === "discounts") loadDiscountCodes();
+  if (tab === "requests") loadProductRequests();
+  if (tab === "qr") renderQrTab();
+}
+
+// ============ İNDİRİM KODLARI (ADMIN) ============
+async function loadDiscountCodes(){
+  const { data, error } = await sb.from("discount_codes").select("*").order("created_at",{ascending:false});
+  if (error){ showToast("Yüklenemedi: " + error.message); return; }
+  document.getElementById("discountCodesBody").innerHTML = (data||[]).map(d => `
+    <tr>
+      <td style="font-weight:700;">${escapeHtml(d.code)}</td>
+      <td>%${d.discount_percent}</td>
+      <td>${d.used_count}${d.max_uses!==null ? " / "+d.max_uses : ""}</td>
+      <td>${d.active ? "Aktif" : "Pasif"}</td>
+      <td style="display:flex;gap:6px;">
+        <button class="small-btn" onclick="toggleDiscountActive('${d.id}', ${!d.active})">${d.active ? "Pasif Yap" : "Aktif Yap"}</button>
+        <button class="small-btn danger" onclick="deleteDiscountCode('${d.id}')">Sil</button>
+      </td>
+    </tr>
+  `).join("") || `<tr><td colspan="5">Henüz indirim kodu yok</td></tr>`;
+}
+
+async function addDiscountCode(){
+  const code = document.getElementById("dcCode").value.trim().toUpperCase();
+  const discount_percent = parseFloat(document.getElementById("dcPercent").value);
+  const maxUsesRaw = document.getElementById("dcMaxUses").value.trim();
+  const max_uses = maxUsesRaw ? parseInt(maxUsesRaw) : null;
+
+  if (!code || isNaN(discount_percent)){ showToast("Kod ve indirim yüzdesi zorunlu"); return; }
+
+  const { error } = await sb.from("discount_codes").insert({ code, discount_percent, max_uses });
+  if (error){ showToast("Eklenemedi: " + error.message); return; }
+
+  ["dcCode","dcPercent","dcMaxUses"].forEach(id => document.getElementById(id).value = "");
+  showToast("İndirim kodu oluşturuldu");
+  loadDiscountCodes();
+}
+
+async function toggleDiscountActive(id, newActive){
+  const { error } = await sb.from("discount_codes").update({ active: newActive }).eq("id", id);
+  if (error){ showToast("Güncellenemedi: " + error.message); return; }
+  loadDiscountCodes();
+}
+
+async function deleteDiscountCode(id){
+  if (!confirm("Bu kodu silmek istediğinize emin misiniz?")) return;
+  const { error } = await sb.from("discount_codes").delete().eq("id", id);
+  if (error){ showToast("Silinemedi: " + error.message); return; }
+  showToast("Kod silindi");
+  loadDiscountCodes();
+}
+
+// ============ ÜRÜN İSTEKLERİ / OYLAMA ============
+async function loadProductRequests(){
+  const { data: requests } = await sb.from("product_requests").select("*").order("created_at",{ascending:false});
+  const { data: votes } = await sb.from("product_request_votes").select("request_id");
+  const voteCounts = {};
+  (votes||[]).forEach(v => { voteCounts[v.request_id] = (voteCounts[v.request_id]||0) + 1; });
+
+  document.getElementById("requestsListAdmin").innerHTML = (requests||[]).map(r => `
+    <div class="stat-card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div style="display:flex;gap:12px;align-items:center;">
+        <img src="${r.image_url || 'https://picsum.photos/seed/'+r.id+'/100/100'}" style="width:48px;height:48px;object-fit:cover;border-radius:8px;">
+        <div>
+          <div style="font-weight:700;">${escapeHtml(r.name)}</div>
+          <div style="font-size:12px;color:var(--ink-soft);">${voteCounts[r.id]||0} oy</div>
+        </div>
+      </div>
+      <button class="small-btn danger" onclick="deleteProductRequest('${r.id}')">Sil</button>
+    </div>
+  `).join("") || `<div class="empty-state">Henüz öneri eklenmedi</div>`;
+}
+
+async function addProductRequest(){
+  const name = document.getElementById("reqName").value.trim();
+  const image_url = document.getElementById("reqImage").value.trim();
+  const description = document.getElementById("reqDesc").value.trim();
+  if (!name){ showToast("Ürün adı zorunlu"); return; }
+
+  const { error } = await sb.from("product_requests").insert({ name, image_url, description });
+  if (error){ showToast("Eklenemedi: " + error.message); return; }
+
+  ["reqName","reqImage","reqDesc"].forEach(id => document.getElementById(id).value = "");
+  showToast("Öneri eklendi");
+  loadProductRequests();
+}
+
+async function deleteProductRequest(id){
+  if (!confirm("Bu öneriyi silmek istediğinize emin misiniz?")) return;
+  const { error } = await sb.from("product_requests").delete().eq("id", id);
+  if (error){ showToast("Silinemedi: " + error.message); return; }
+  showToast("Öneri silindi");
+  loadProductRequests();
+}
+
+// ============ QR KOD ============
+function renderQrTab(){
+  const url = window.location.origin + window.location.pathname;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
+  document.getElementById("qrCodeImg").src = qrUrl;
+  document.getElementById("qrDownloadLink").href = qrUrl;
 }
 
 // ============ HELPERS ============
