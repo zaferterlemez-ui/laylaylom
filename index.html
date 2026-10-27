@@ -401,6 +401,12 @@
     </div>
 
     <div class="stat-card" style="margin-bottom:24px;">
+      <div class="label" style="margin-bottom:10px;">Kota Durumu (tahmini)</div>
+      <div id="quotaAlert" style="display:none;background:#fdecea;color:#8a1f17;border:1px solid #f3b9b3;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px;line-height:1.5;"></div>
+      <div id="quotaBody" style="font-size:14px;color:var(--ink-soft);">Yükleniyor…</div>
+    </div>
+
+    <div class="stat-card" style="margin-bottom:24px;">
       <div class="label" style="margin-bottom:10px;">En Çok İncelenen Ürünler</div>
       <div id="topViewedList" style="font-size:14px;color:var(--ink-soft);">Yükleniyor…</div>
     </div>
@@ -625,7 +631,7 @@ async function loadPublicRequests(){
   document.getElementById("requestsSection").style.display = "block";
   document.getElementById("requestsGrid").innerHTML = requests.map(r => `
     <div class="card">
-      <div class="card-img"><img src="${r.image_url || 'https://picsum.photos/seed/'+r.id+'/600/600'}" alt="${escapeHtml(r.name)}" loading="lazy" decoding="async"></div>
+      <div class="card-img"><img src="${thumbUrl(r.image_url) || 'https://picsum.photos/seed/'+r.id+'/600/600'}" onerror="this.onerror=null;this.src='${r.image_url || 'https://picsum.photos/seed/'+r.id+'/600/600'}'" alt="${escapeHtml(r.name)}" loading="lazy" decoding="async"></div>
       <div class="card-body">
         <h3 class="card-name">${escapeHtml(r.name)}</h3>
         <div class="card-desc">${escapeHtml(r.description || "")}</div>
@@ -761,7 +767,7 @@ function renderGrid(){
         ${isNewProduct(p) ? `<span style="position:absolute;top:10px;left:10px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;z-index:1;">YENİ</span>` : ""}
         ${(p.sold_count||0) >= 3 ? `<span style="position:absolute;top:10px;right:10px;background:var(--mustard);color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;z-index:1;">🔥 Çok Satan</span>` : ""}
         <button onclick="toggleFavorite(event,'${p.id}')" style="position:absolute;bottom:8px;left:8px;background:rgba(255,255,255,.85);width:30px;height:30px;border-radius:50%;font-size:15px;z-index:2;display:flex;align-items:center;justify-content:center;">${favorites.includes(p.id) ? "❤️" : "🤍"}</button>
-        <img id="cardImg-${p.id}" src="${shown}" alt="${escapeHtml(p.name)}" loading="lazy" decoding="async">
+        <img id="cardImg-${p.id}" src="${thumbUrl(shown)}" onerror="this.onerror=null;this.src='${shown}'" alt="${escapeHtml(p.name)}" loading="lazy" decoding="async">
         ${gallery.length > 1 ? `
           <button onclick="changeCardImage(event,'${p.id}',-1)" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.45);color:#fff;width:28px;height:28px;border-radius:50%;font-size:16px;z-index:2;">‹</button>
           <button onclick="changeCardImage(event,'${p.id}',1)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.45);color:#fff;width:28px;height:28px;border-radius:50%;font-size:16px;z-index:2;">›</button>
@@ -795,7 +801,11 @@ function changeCardImage(event, id, delta){
   if (idx >= gallery.length) idx = 0;
   cardImageIndex[id] = idx;
   const imgEl = document.getElementById('cardImg-'+id);
-  if (imgEl) imgEl.src = gallery[idx];
+  if (imgEl){
+    const full = gallery[idx];
+    imgEl.onerror = function(){ this.onerror = null; this.src = full; };
+    imgEl.src = thumbUrl(full);
+  }
   const counterEl = document.getElementById('counter-'+id);
   if (counterEl) counterEl.textContent = `${idx+1}/${gallery.length}`;
 }
@@ -809,7 +819,7 @@ function openProductDetail(id){
   document.getElementById("detailImg").src = gallery[0] || fallback;
   const thumbsEl = document.getElementById("detailThumbs");
   if (gallery.length > 1){
-    thumbsEl.innerHTML = gallery.map((url,i) => `<img src="${url}" onclick="document.getElementById('detailImg').src='${url}'" style="width:56px;height:56px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid ${i===0?'var(--ink)':'transparent'};" onload="this.style.opacity=1">`).join("");
+    thumbsEl.innerHTML = gallery.map((url,i) => `<img src="${thumbUrl(url)}" onerror="this.onerror=null;this.src='${url}'" onclick="document.getElementById('detailImg').src='${url}'" style="width:56px;height:56px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid ${i===0?'var(--ink)':'transparent'};" onload="this.style.opacity=1">`).join("");
   } else {
     thumbsEl.innerHTML = "";
   }
@@ -877,7 +887,7 @@ function updateCartUI(){
   } else {
     body.innerHTML = cart.map(c => `
       <div class="cart-item">
-        <img src="${c.image_url || 'https://picsum.photos/seed/'+c.id+'/200/200'}">
+        <img src="${thumbUrl(c.image_url) || 'https://picsum.photos/seed/'+c.id+'/200/200'}" onerror="this.onerror=null;this.src='${c.image_url || 'https://picsum.photos/seed/'+c.id+'/200/200'}'">
         <div class="cart-item-info">
           <div class="name">${escapeHtml(c.name)}</div>
           <div>${formatPrice(c.price)}</div>
@@ -1088,6 +1098,7 @@ async function loadAdminData(){
       ? topViewed.map((x,i) => `<div style="display:flex;justify-content:space-between;padding:6px 0;${i<topViewed.length-1?'border-bottom:1px solid var(--line);':''}"><span>${i+1}. ${escapeHtml(x.product.name)}</span><span style="font-weight:700;color:var(--ink);">${x.count} inceleme</span></div>`).join("")
       : "Henüz yeterli veri yok.";
   }
+  loadQuotaStatus();
 }
 
 function renderAdminProducts(){
@@ -1097,7 +1108,7 @@ function renderAdminProducts(){
     const profit = Number(p.price||0) - Number(p.cost||0);
     return `
     <tr>
-      <td><img loading="lazy" src="${p.image_url || 'https://picsum.photos/seed/'+p.id+'/100/100'}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;"></td>
+      <td><img loading="lazy" src="${thumbUrl(p.image_url) || 'https://picsum.photos/seed/'+p.id+'/100/100'}" onerror="this.onerror=null;this.src='${p.image_url || 'https://picsum.photos/seed/'+p.id+'/100/100'}'" style="width:44px;height:44px;object-fit:cover;border-radius:8px;"></td>
       <td>${escapeHtml(p.name)}</td>
       <td>${escapeHtml(p.category||"-")}</td>
       <td>${formatPrice(p.price)}</td>
@@ -1235,18 +1246,33 @@ async function compressImage(file, maxDim = 1200, quality = 0.8){
   }
 }
 
-async function uploadFileToBucket(file){
+const THUMB_DIM = 400;
+const BUCKET_PUBLIC = "/storage/v1/object/public/product-images/";
+
+// Ana fotoğraf adresinden küçük (kart) fotoğrafın adresini üretir: abc.jpg -> abc_t.jpg
+function thumbUrl(url){
+  if (!url || !url.includes(BUCKET_PUBLIC)) return url;
+  return url.replace(/(\.[A-Za-z0-9]+)(\?.*)?$/, "_t$1$2");
+}
+
+async function uploadFileToBucket(file, thumbFile){
   const ext = file.name.split(".").pop() || "jpg";
-  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const { error: upErr } = await sb.storage.from("product-images").upload(path, file, { cacheControl: "31536000", contentType: file.type || undefined });
+  const base = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const opts = (f) => ({ cacheControl: "31536000", contentType: f.type || undefined });
+  const { error: upErr } = await sb.storage.from("product-images").upload(`${base}.${ext}`, file, opts(file));
   if (upErr) throw upErr;
-  const { data } = sb.storage.from("product-images").getPublicUrl(path);
+  if (thumbFile){
+    // küçük kopya başarısız olursa sorun değil, site büyük fotoğrafa döner
+    await sb.storage.from("product-images").upload(`${base}_t.${ext}`, thumbFile, opts(thumbFile)).catch(()=>{});
+  }
+  const { data } = sb.storage.from("product-images").getPublicUrl(`${base}.${ext}`);
   return data.publicUrl;
 }
 
 async function uploadProductImage(originalFile){
   const file = await compressImage(originalFile);
-  return uploadFileToBucket(file);
+  const thumb = await compressImage(originalFile, THUMB_DIM, 0.75);
+  return uploadFileToBucket(file, thumb);
 }
 
 function editProduct(id){
@@ -1393,7 +1419,7 @@ async function loadProductRequests(){
   document.getElementById("requestsListAdmin").innerHTML = (requests||[]).map(r => `
     <div class="stat-card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
       <div style="display:flex;gap:12px;align-items:center;">
-        <img loading="lazy" src="${r.image_url || 'https://picsum.photos/seed/'+r.id+'/100/100'}" style="width:48px;height:48px;object-fit:cover;border-radius:8px;">
+        <img loading="lazy" src="${thumbUrl(r.image_url) || 'https://picsum.photos/seed/'+r.id+'/100/100'}" onerror="this.onerror=null;this.src='${r.image_url || 'https://picsum.photos/seed/'+r.id+'/100/100'}'" style="width:48px;height:48px;object-fit:cover;border-radius:8px;">
         <div>
           <div style="font-weight:700;">${escapeHtml(r.name)}</div>
           <div style="font-size:12px;color:var(--ink-soft);">${voteCounts[r.id]||0} oy</div>
@@ -1504,18 +1530,33 @@ function storagePathFromUrl(url){
   return decodeURIComponent(url.slice(i + PUBLIC_MARK.length).split("?")[0]);
 }
 
+async function ensureThumb(url, file){
+  const path = storagePathFromUrl(url);
+  if (!path) return;
+  try{ const r = await fetch(thumbUrl(url)); if (r.ok) return; }catch(e){} // zaten var
+  const thumb = await compressImage(file, THUMB_DIM, 0.75);
+  const dot = path.lastIndexOf(".");
+  const tPath = dot === -1 ? path + "_t" : path.slice(0, dot) + "_t" + path.slice(dot);
+  await sb.storage.from("product-images").upload(tPath, thumb, { cacheControl: "31536000", contentType: thumb.type || undefined });
+}
+
 async function optimizeUrl(url){
   const oldPath = storagePathFromUrl(url);
   if (!oldPath) return null;
   const res = await fetch(url);
   if (!res.ok) throw new Error("indirilemedi");
   const blob = await res.blob();
-  if (blob.size < OPT_MIN_BYTES) return null;
   const file = new File([blob], oldPath.split("/").pop(), { type: blob.type || "image/jpeg" });
-  const small = await compressImage(file);
-  if (small === file || small.size > blob.size * 0.8) return null;
-  const newUrl = await uploadFileToBucket(small);
-  return { url: newUrl, oldPath, saved: blob.size - small.size };
+  if (blob.size >= OPT_MIN_BYTES){
+    const small = await compressImage(file);
+    if (small !== file && small.size <= blob.size * 0.8){
+      const thumb = await compressImage(file, THUMB_DIM, 0.75);
+      const newUrl = await uploadFileToBucket(small, thumb);
+      return { url: newUrl, oldPath, saved: blob.size - small.size };
+    }
+  }
+  await ensureThumb(url, file); // büyük değilse veya küçülmediyse sadece küçük kopyasını üret
+  return null;
 }
 
 async function optimizeExistingImages(){
@@ -1570,6 +1611,73 @@ async function optimizeExistingImages(){
   }
   btn.disabled = false;
   loadAdminData();
+}
+
+// ============ TRAFİK SAYACI VE KOTA ALARMI ============
+const QUOTA_EGRESS_MB = 5120;   // Supabase ücretsiz plan: aylık 5 GB cached egress
+const QUOTA_STORAGE_MB = 1024;  // 1 GB depolama
+const ALERT_PCT = 70;           // %70'te alarm
+
+// Ziyaretçinin tarayıcısı kaç fotoğraf yüklediğini sayar ve ayrılırken tek satır olarak gönderir
+let trafficCounts = { thumbs: 0, fulls: 0 };
+document.addEventListener("load", (e) => {
+  const t = e.target;
+  if (!t || t.tagName !== "IMG" || !t.src || !t.src.includes(BUCKET_PUBLIC)) return;
+  if (/_t\.[A-Za-z0-9]+(\?.*)?$/.test(t.src)) trafficCounts.thumbs++; else trafficCounts.fulls++;
+}, true);
+
+function flushTraffic(){
+  if (!trafficCounts.thumbs && !trafficCounts.fulls) return;
+  const body = JSON.stringify({ thumbs: trafficCounts.thumbs, fulls: trafficCounts.fulls });
+  trafficCounts = { thumbs: 0, fulls: 0 };
+  try{
+    fetch(`${SUPABASE_URL}/rest/v1/traffic_log`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, Prefer: "return=minimal" },
+      body, keepalive: true
+    }).catch(()=>{});
+  }catch(e){}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushTraffic(); });
+window.addEventListener("pagehide", flushTraffic);
+
+function quotaBar(label, used, limit){
+  const pct = Math.round(used / limit * 100);
+  const color = pct >= 80 ? "var(--accent)" : pct >= 50 ? "var(--mustard)" : "#2a8a4a";
+  return `<div style="margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:4px;"><span>${label}</span><span style="color:var(--ink);font-weight:700;white-space:nowrap;">${used.toFixed(0)} MB / ${limit} MB (%${pct})</span></div>
+    <div style="height:8px;background:var(--line);border-radius:999px;overflow:hidden;"><div style="width:${Math.min(100,pct)}%;height:100%;background:${color};"></div></div>
+  </div>`;
+}
+
+async function loadQuotaStatus(){
+  const body = document.getElementById("quotaBody");
+  const alertEl = document.getElementById("quotaAlert");
+  if (!body) return;
+  const { data: q, error } = await sb.rpc("quota_status", { days: 30 });
+  if (error || !q){
+    body.textContent = "Kota sayacı için SQL kurulumu gerekli (add_quota_meter.sql dosyasını Supabase'de çalıştırın).";
+    return;
+  }
+  const egress = Number(q.estimated_egress_mb || 0);
+  const storage = Number(q.storage_mb || 0);
+  body.innerHTML =
+    quotaBar("Tahmini fotoğraf trafiği (son 30 gün)", egress, QUOTA_EGRESS_MB) +
+    quotaBar("Fotoğraf depolama", storage, QUOTA_STORAGE_MB) +
+    `<div style="font-size:12px;line-height:1.5;">Son 30 günde ${q.visits} ziyaret kaydı. Trafik rakamı <b>tahmindir</b> (sayaç bu güncellemeden sonraki ziyaretlerle dolmaya başlar). Gerçek rakam için Supabase Usage sayfasına bakın.</div>`;
+
+  const msgs = [];
+  if (egress / QUOTA_EGRESS_MB * 100 >= ALERT_PCT)
+    msgs.push(`⚠️ Trafik kotası dolmak üzere (tahmini %${Math.round(egress / QUOTA_EGRESS_MB * 100)}). Yeni duyuru yapmadan önce Supabase Usage sayfasına bakın, gerekirse Pro'ya geçin.`);
+  if (storage / QUOTA_STORAGE_MB * 100 >= ALERT_PCT)
+    msgs.push(`⚠️ Depolama dolmak üzere (%${Math.round(storage / QUOTA_STORAGE_MB * 100)}). "Fotoğrafları küçült" butonunu çalıştırın.`);
+  if (msgs.length){
+    alertEl.innerHTML = msgs.join("<br>");
+    alertEl.style.display = "block";
+    showToast("Kota uyarısı: panelin üstüne bakın");
+  } else {
+    alertEl.style.display = "none";
+  }
 }
 
 // ============ HELPERS ============
