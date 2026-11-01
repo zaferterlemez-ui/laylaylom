@@ -1,19 +1,32 @@
-name: Supabase keep-alive
+name: Supabase bekçi (uyandırma + kota alarmı)
 
-# Supabase ücretsiz planı 7 gün hareketsiz kalırsa projeyi duraklatır.
-# Bu iş her 3 günde bir veritabanına küçük bir okuma isteği atar.
-# Supabase erişilemezse iş "başarısız" olur ve GitHub size e-posta gönderir (ücretsiz uyarı).
+# Her gün bir kez çalışır:
+#  1) Veritabanına küçük bir okuma isteği atar (7 gün hareketsizlik duraklatmasını önler)
+#  2) Tahmini trafik veya depolama kotanın %70'ini geçerse işi BAŞARISIZ yapar
+# İş başarısız olursa GitHub size e-posta gönderir. Supabase erişilemezse de aynı şekilde.
 on:
   schedule:
-    - cron: "17 6 */3 * *"
+    - cron: "17 6 * * *"
   workflow_dispatch:
 
 jobs:
-  ping:
+  watch:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase
+      - name: Uyandır ve kota durumunu kontrol et
         run: |
-          curl -fsS "https://bauafpgkryxbtijqwmpi.supabase.co/rest/v1/products?select=id&limit=1" \
+          RES=$(curl -fsS -X POST "https://bauafpgkryxbtijqwmpi.supabase.co/rest/v1/rpc/quota_status" \
             -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhdWFmcGdrcnl4YnRpanF3bXBpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1MjkwMzQsImV4cCI6MjEwMTEwNTAzNH0.LNRUpuLIJsJwJPL7nZvbwHbiR2NC-EFWP_wJ10yiW7U" \
-            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhdWFmcGdrcnl4YnRpanF3bXBpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1MjkwMzQsImV4cCI6MjEwMTEwNTAzNH0.LNRUpuLIJsJwJPL7nZvbwHbiR2NC-EFWP_wJ10yiW7U"
+            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhdWFmcGdrcnl4YnRpanF3bXBpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1MjkwMzQsImV4cCI6MjEwMTEwNTAzNH0.LNRUpuLIJsJwJPL7nZvbwHbiR2NC-EFWP_wJ10yiW7U" \
+            -H "Content-Type: application/json" \
+            -d '{"days":30}')
+          echo "$RES"
+          EGRESS=$(echo "$RES" | python3 -c "import sys,json; print(json.load(sys.stdin)['estimated_egress_mb'])")
+          STORAGE=$(echo "$RES" | python3 -c "import sys,json; print(json.load(sys.stdin)['storage_mb'])")
+          echo "Tahmini trafik: ${EGRESS} MB / 5120 MB | Depolama: ${STORAGE} MB / 1024 MB"
+          awk -v e="$EGRESS" -v s="$STORAGE" 'BEGIN {
+            bad = 0
+            if (e > 3584) { print "UYARI: Tahmini trafik kotanin %70 ustunde"; bad = 1 }
+            if (s > 717)  { print "UYARI: Depolama kotanin %70 ustunde"; bad = 1 }
+            exit bad
+          }'
