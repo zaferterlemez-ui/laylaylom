@@ -395,8 +395,9 @@
     <div class="stat-row">
       <div class="stat-card"><div class="label">Toplam Ziyaret</div><div class="value" id="statVisits">0</div></div>
       <div class="stat-card"><div class="label">Toplam Sipariş</div><div class="value" id="statOrders">0</div></div>
-      <div class="stat-card"><div class="label">Toplam Ciro</div><div class="value" id="statRevenue">0 ₺</div></div>
-      <div class="stat-card"><div class="label">Toplam Kâr</div><div class="value" id="statEarnings">0 ₺</div></div>
+      <div class="stat-card"><div class="label">Ciro (tamamlanan)</div><div class="value" id="statRevenue">0 ₺</div></div>
+      <div class="stat-card"><div class="label">Kâr (tamamlanan)</div><div class="value" id="statEarnings">0 ₺</div></div>
+      <div class="stat-card"><div class="label">Bekleyen siparişler</div><div class="value" id="statPending">0 ₺</div><div id="statPendingSub" style="font-size:12px;color:var(--ink-soft);margin-top:2px;">0 sipariş</div></div>
       <div class="stat-card"><div class="label">Ürün Sayısı</div><div class="value" id="statProducts">0</div></div>
     </div>
 
@@ -1073,12 +1074,20 @@ async function loadAdminData(){
     badgeEl.textContent = newCount;
     badgeEl.style.display = newCount > 0 ? "inline" : "none";
   }
-  const validOrders = (orders||[]).filter(o => o.status !== "iptal");
-  const revenue = validOrders.reduce((s,o)=>s+Number(o.total||0),0);
-  const profit = validOrders.reduce((s,o)=> s + (o.items||[]).reduce((is,i)=> is + (Number(i.price||0)-Number(i.cost||0))*Number(i.qty||0), 0), 0);
+  const completedOrders = (orders||[]).filter(o => o.status === "tamamlandı");
+  const pendingOrders = (orders||[]).filter(o => ["yeni","onaylandı","kargoda"].includes(o.status));
+  const revenue = completedOrders.reduce((s,o)=>s+Number(o.total||0),0);
+  const profit = completedOrders.reduce((s,o)=>s+orderProfit(o),0);
   document.getElementById("statEarnings").textContent = formatPrice(profit);
   const revEl = document.getElementById("statRevenue");
   if (revEl) revEl.textContent = formatPrice(revenue);
+  const pendingTotal = pendingOrders.reduce((s,o)=>s+Number(o.total||0),0);
+  const pendingProfit = pendingOrders.reduce((s,o)=>s+orderProfit(o),0);
+  const pendEl = document.getElementById("statPending");
+  if (pendEl){
+    pendEl.textContent = formatPrice(pendingTotal);
+    document.getElementById("statPendingSub").textContent = `${pendingOrders.length} sipariş · beklenen kâr ${formatPrice(pendingProfit)}`;
+  }
 
   const { count: visitCount } = await sb.from("page_views").select("*", { count: "exact", head: true });
   const visitsEl = document.getElementById("statVisits");
@@ -1128,7 +1137,7 @@ const ORDER_STATUSES = ["yeni","onaylandı","kargoda","tamamlandı","iptal"];
 
 function renderAdminOrders(orders){
   document.getElementById("adminOrdersBody").innerHTML = orders.map(o => {
-    const orderProfit = (o.items||[]).reduce((s,i)=> s + (Number(i.price||0)-Number(i.cost||0))*Number(i.qty||0), 0);
+    const profitOfOrder = orderProfit(o);
     return `
     <tr>
       <td>${new Date(o.created_at).toLocaleString("tr-TR")}</td>
@@ -1136,7 +1145,7 @@ function renderAdminOrders(orders){
       <td>${escapeHtml(o.customer_phone||"-")}</td>
       <td style="max-width:220px;font-size:12px;color:var(--ink-soft);">${(o.items||[]).map(i=>`${escapeHtml(i.name)} x${i.qty}`).join(", ")}</td>
       <td>${formatPrice(o.total)}</td>
-      <td style="font-weight:700;">${formatPrice(orderProfit)}</td>
+      <td style="font-weight:700;">${formatPrice(profitOfOrder)}</td>
       <td>
         <select class="small-btn" style="font-weight:600;" onchange="updateOrderStatus('${o.id}', this.value)">
           ${ORDER_STATUSES.map(s => `<option value="${s}" ${o.status===s?"selected":""}>${s}</option>`).join("")}
@@ -1678,6 +1687,12 @@ async function loadQuotaStatus(){
   } else {
     alertEl.style.display = "none";
   }
+}
+
+// Sipariş kârı = (indirimli) toplam tutar − toplam maliyet. İndirim kodu kullanılan siparişlerde de doğru çıkar.
+function orderProfit(o){
+  const cost = (o.items || []).reduce((s,i) => s + Number(i.cost || 0) * Number(i.qty || 0), 0);
+  return Number(o.total || 0) - cost;
 }
 
 // ============ HELPERS ============
