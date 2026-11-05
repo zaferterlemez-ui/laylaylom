@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>laylaylom — Katalog</title>
+<title>ztconsept — Katalog</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛍️</text></svg>">
-<meta name="description" content="laylaylom — kataloğa göz atın, sepetinize ekleyin, WhatsApp üzerinden kolayca sipariş verin.">
-<meta property="og:title" content="laylaylom — Katalog">
+<meta name="description" content="ztconsept — kataloğa göz atın, sepetinize ekleyin, WhatsApp üzerinden kolayca sipariş verin.">
+<meta property="og:title" content="ztconsept — Katalog">
 <meta property="og:description" content="Beğendiğini seç, WhatsApp'tan sipariş ver.">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -301,7 +301,7 @@
 <!-- ============ PUBLIC SITE ============ -->
 <div id="publicSite">
   <header>
-    <div class="logo">laylaylom<span class="dot">.</span></div>
+    <div class="logo">ztconsept<span class="dot">.</span></div>
     <div class="header-actions">
       <button class="icon-btn" onclick="openCart()">
         🛒 Sepet <span class="badge" id="cartCount">0</span>
@@ -343,7 +343,7 @@
   </main>
 
   <footer>
-    laylaylom © 2026 · Siparişleriniz için WhatsApp üzerinden bizimle iletişime geçebilirsiniz.
+    ztconsept © 2026 · Siparişleriniz için WhatsApp üzerinden bizimle iletişime geçebilirsiniz.
   </footer>
 </div>
 
@@ -388,7 +388,7 @@
 <!-- ADMIN PANEL -->
 <div class="admin-panel" id="adminPanel">
   <div class="admin-bar">
-    <span>🛠️ Admin Paneli — laylaylom</span>
+    <span>🛠️ Admin Paneli — ztconsept</span>
     <button onclick="doLogout()">Çıkış Yap</button>
   </div>
   <main>
@@ -518,7 +518,7 @@
         <h3 style="margin-bottom:14px;">Mağaza QR Kodu</h3>
         <img id="qrCodeImg" style="width:220px;height:220px;margin:0 auto 14px;border-radius:12px;">
         <p class="sub" style="margin-bottom:14px;">Bu kodu yazdırıp fiziksel ürünlerinizin yanına koyabilirsiniz — okutan kişi direkt mağazaya ulaşır.</p>
-        <a id="qrDownloadLink" class="btn-primary" style="display:block;text-decoration:none;" download="laylaylom-qr.png">İndir</a>
+        <a id="qrDownloadLink" class="btn-primary" style="display:block;text-decoration:none;" download="ztconsept-qr.png">İndir</a>
       </div>
     </div>
   </main>
@@ -570,10 +570,10 @@ let cardImageIndex = {}; // ana sayfada her ürünün hangi fotoğrafta olduğu
 let favorites = loadFavorites();
 
 function loadFavorites(){
-  try{ return JSON.parse(localStorage.getItem("laylaylom_favorites") || "[]"); }catch(e){ return []; }
+  try{ return JSON.parse(localStorage.getItem("ztconsept_favorites") || "[]"); }catch(e){ return []; }
 }
 function saveFavorites(){
-  try{ localStorage.setItem("laylaylom_favorites", JSON.stringify(favorites)); }catch(e){}
+  try{ localStorage.setItem("ztconsept_favorites", JSON.stringify(favorites)); }catch(e){}
 }
 function toggleFavorite(event, id){
   event.stopPropagation();
@@ -592,12 +592,12 @@ function isNewProduct(p){
 
 function loadCartFromStorage(){
   try{
-    const saved = localStorage.getItem("laylaylom_cart");
+    const saved = localStorage.getItem("ztconsept_cart");
     return saved ? JSON.parse(saved) : [];
   }catch(e){ return []; }
 }
 function saveCartToStorage(){
-  try{ localStorage.setItem("laylaylom_cart", JSON.stringify(cart)); }catch(e){}
+  try{ localStorage.setItem("ztconsept_cart", JSON.stringify(cart)); }catch(e){}
 }
 
 // ============ INIT ============
@@ -611,8 +611,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 function getVoterId(){
-  let v = localStorage.getItem("laylaylom_voter_id");
-  if (!v){ v = 'v_' + Math.random().toString(36).slice(2) + Date.now(); localStorage.setItem("laylaylom_voter_id", v); }
+  let v = localStorage.getItem("ztconsept_voter_id");
+  if (!v){ v = 'v_' + Math.random().toString(36).slice(2) + Date.now(); localStorage.setItem("ztconsept_voter_id", v); }
   return v;
 }
 
@@ -664,7 +664,7 @@ async function loadProducts(){
         <div style="font-size:36px;margin-bottom:8px;">🛠️</div>
         <h3 style="margin:0 0 8px;">Mağazamız kısa süreliğine bakımda</h3>
         <p style="margin:0 0 16px;">Ürünleri şu an gösteremiyoruz ama siparişleriniz için bize WhatsApp'tan ulaşabilirsiniz.</p>
-        <a class="hero-cta" target="_blank" style="text-decoration:none;" href="https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Merhaba, laylaylom mağazası için yazıyorum.')}">📲 WhatsApp'tan Yazın</a>
+        <a class="hero-cta" target="_blank" style="text-decoration:none;" href="https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Merhaba, ztconsept mağazası için yazıyorum.')}">📲 WhatsApp'tan Yazın</a>
       </div>`;
     return;
   }
@@ -758,7 +758,12 @@ function renderGrid(){
     grid.innerHTML = `<div class="empty-state">Aradığınız kriterlere uygun ürün yok.</div>`;
     return;
   }
-  grid.innerHTML = visible.map(p => {
+
+  // Stoğu biten ürünler her zaman en sonda; kendi aralarında ve stoktakilerde sıra korunur
+  const isSoldOut = (p) => p.stock !== null && p.stock !== undefined && p.stock <= 0;
+  const ordered = [...visible.filter(p => !isSoldOut(p)), ...visible.filter(isSoldOut)];
+
+  grid.innerHTML = ordered.map(p => {
     const gallery = (Array.isArray(p.images) && p.images.length) ? p.images : (p.image_url ? [p.image_url] : []);
     const idx = cardImageIndex[p.id] || 0;
     const shown = gallery[idx] || gallery[0] || 'https://picsum.photos/seed/'+p.id+'/600/600';
@@ -972,7 +977,7 @@ async function sendOrder(){
     await sb.from("discount_codes").update({ used_count: (appliedDiscount.used_count||0) + 1 }).eq("id", appliedDiscount.id);
   }
 
-  let msg = `Merhaba, laylaylom üzerinden sipariş vermek istiyorum:\n\n`;
+  let msg = `Merhaba, ztconsept üzerinden sipariş vermek istiyorum:\n\n`;
   cart.forEach((c,i) => { msg += `${i+1}) ${c.name} — ${c.qty} adet x ${formatPrice(c.price)} = ${formatPrice(c.price*c.qty)}\n`; });
   if (appliedDiscount) msg += `\nAra Toplam: ${formatPrice(subtotal)}\nİndirim (%${appliedDiscount.discount_percent}): -${formatPrice(subtotal-total)}`;
   msg += `\n*Toplam: ${formatPrice(total)}*\n\nAd Soyad: ${name}`;
@@ -1036,7 +1041,7 @@ function subscribeToNewOrders(){
       playNotificationSound();
       showToast("🔔 Yeni sipariş geldi: " + (payload.new.customer_name || ""));
       if (window.Notification && Notification.permission === "granted"){
-        try { new Notification("laylaylom — Yeni Sipariş!", { body: (payload.new.customer_name||"Bir müşteri") + " sipariş verdi." }); } catch(e){}
+        try { new Notification("ztconsept — Yeni Sipariş!", { body: (payload.new.customer_name||"Bir müşteri") + " sipariş verdi." }); } catch(e){}
       }
       loadAdminData();
     })
